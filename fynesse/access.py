@@ -23,6 +23,11 @@ def hello_world():
   print("Hello from the data science library!")
 
 def download_price_paid_data(year_from: int, year_to: int):
+    """
+    Download UK house price data for given year range
+    :param year_from: starting year
+    :param year_to: ending year
+    """
     # Base URL where the dataset is stored
     base_url = "http://prod.publicdata.landregistry.gov.uk.s3-website-eu-west-1.amazonaws.com"
     """Download UK house price data for given year range"""
@@ -37,7 +42,7 @@ def download_price_paid_data(year_from: int, year_to: int):
                 with open("." + file_name.replace("<year>", str(year)).replace("<part>", str(part)), "wb") as file:
                     file.write(response.content)
 
-def create_connection(user, password, host, database, port=3306):
+def create_connection(user: str, password: str, host: str, database: str, port:int = 3306)-> pymysql.connections.Connection:
     """ Create a database connection to the MariaDB database
         specified by the host url and database name.
     :param user: username
@@ -61,7 +66,12 @@ def create_connection(user, password, host, database, port=3306):
         print(f"Error connecting to the MariaDB Server: {e}")
     return conn
 
-def housing_upload_join_data(conn, year):
+def housing_upload_join_data(conn: pymysql.connections.Connection, year: int):
+  """
+  Upload the data to the database
+  :param conn: Connection object
+  :param year: year for which data is to be uploaded
+  """
   start_date = str(year) + "-01-01"
   end_date = str(year) + "-12-31"
 
