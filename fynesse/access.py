@@ -72,23 +72,29 @@ def housing_upload_join_data(conn: pymysql.connections.Connection, year: int):
   :param conn: Connection object
   :param year: year for which data is to be uploaded
   """
-  start_date = str(year) + "-01-01"
-  end_date = str(year) + "-12-31"
 
+  csv_file_path = os.path.abspath(f'./output_file_{year}.csv')
   cur = conn.cursor()
-  print('Selecting data for year: ' + str(year))
-  cur.execute(f'SELECT pp.price, pp.date_of_transfer, po.postcode, pp.property_type, pp.new_build_flag, pp.tenure_type, pp.locality, pp.town_city, pp.district, pp.county, po.country, po.latitude, po.longitude FROM (SELECT price, date_of_transfer, postcode, property_type, new_build_flag, tenure_type, locality, town_city, district, county FROM pp_data WHERE date_of_transfer BETWEEN "' + start_date + '" AND "' + end_date + '") AS pp INNER JOIN postcode_data AS po ON pp.postcode = po.postcode')
-  rows = cur.fetchall()
 
-  csv_file_path = f'./output_file_{year}.csv'
+  if not os.path.exists(csv_file_path):
 
-  # Write the rows to the CSV file
-  with open(csv_file_path, 'w', newline='') as csvfile:
-    csv_writer = csv.writer(csvfile)
-    # Write the data rows
-    csv_writer.writerows(rows)
+    start_date = str(year) + "-01-01"
+    end_date = str(year) + "-12-31"
+    
+    print('Selecting data for year: ' + str(year))
+    cur.execute(f'SELECT pp.price, pp.date_of_transfer, po.postcode, pp.property_type, pp.new_build_flag, pp.tenure_type, pp.locality, pp.town_city, pp.district, pp.county, po.country, po.latitude, po.longitude FROM (SELECT price, date_of_transfer, postcode, property_type, new_build_flag, tenure_type, locality, town_city, district, county FROM pp_data WHERE date_of_transfer BETWEEN "' + start_date + '" AND "' + end_date + '") AS pp INNER JOIN postcode_data AS po ON pp.postcode = po.postcode')
+    rows = cur.fetchall()
+
+    # Write the rows to the CSV file
+    with open(csv_file_path, 'w', newline='') as csvfile:
+      csv_writer = csv.writer(csvfile)
+      # Write the data rows
+      csv_writer.writerows(rows)
+  else:
+    print('CSV file already exists')
+
   print('Storing data for year: ' + str(year))
-  cur.execute(f"LOAD DATA LOCAL INFILE '" + csv_file_path + "' INTO TABLE `prices_coordinates_data` FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED by '\"' LINES STARTING BY '' TERMINATED BY '\n';")
+  response = cur.execute(f"LOAD DATA LOCAL INFILE '{csv_file_path}' INTO TABLE `prices_coordinates_data` FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED by '\"' LINES STARTING BY '' TERMINATED BY '\n';")
   conn.commit()
   print('Data stored for year: ' + str(year))
   cur.close()
