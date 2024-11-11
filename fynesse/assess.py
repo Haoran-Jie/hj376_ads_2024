@@ -4,6 +4,7 @@ from . import access
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+import warnings
 from .access import fetch_building_within_bbox, create_connection, fetch_houses_within_box
 
 """These are the types of import we might expect in this file
@@ -143,4 +144,31 @@ def plot_boxplot_price_by_property_type(final_matched_df):
     plt.title("Boxplot of Price by Property Type (Log Scale)")
     plt.xlabel("Property Type")
     plt.ylabel("Price (log scale)")
+    plt.show()
+
+
+def plot_geodata(geodf, edges, area, xlim, ylim, condition=None, label = None, title = "Map Visualisation"):
+    """
+    Plot GeoDataFrame with nodes, edges, and area.
+    """
+    fig, ax = plt.subplots(figsize=(10, 10))
+    area.plot(ax=ax, facecolor="white")
+    edges.plot(ax=ax, linewidth=1, edgecolor="dimgray")
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    ax.set_xlabel("longitude")
+    ax.set_ylabel("latitude")
+
+    if condition is not None:
+        geodf[condition].plot(ax=ax, color="red", alpha=0.7, markersize=10, label=label)
+        geodf[~condition].plot(ax=ax, color="blue", alpha=0.7, markersize=10, label="Not " + label)
+    else:
+        geodf.plot(ax=ax, color="red", alpha=0.7, markersize=10)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        plt.legend()
+
+    plt.title(title)
+    plt.tight_layout()
     plt.show()

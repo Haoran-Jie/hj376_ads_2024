@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import osmnx as ox
 
 from .utility import calculate_half_side_degrees
+from .assess import plot_geodata
 """
 import httplib2
 import oauth2
@@ -214,7 +215,7 @@ def fetch_houses_within_box(location: tuple[float], side_length_km: float, conn:
 
     return houses_df
 
-def fetch_building_within_bbox(place_name, latitude, longitude, side_length_km, draw=True):
+def fetch_building_within_bbox(place_name, latitude, longitude, side_length_km, draw =True):
     half_side_length_lat, half_side_length_lon = calculate_half_side_degrees((latitude, longitude), side_length_km)
     north, south, east, west = latitude + half_side_length_lat, latitude - half_side_length_lat, longitude + half_side_length_lon, longitude - half_side_length_lon
     bbox = (north, south, east, west)
@@ -232,6 +233,11 @@ def fetch_building_within_bbox(place_name, latitude, longitude, side_length_km, 
     buildings = buildings[address_columns + ['geometry', 'building']]
 
     # Calculate areas: first convert to metric CRS then convert back
+    """
+    Originally it is in geographic CRS, which is good for latitude and longitude (plotting) but not for area calculation, as the unit is degree squared rather than meters squared.
+    ESPG: 4326 is the geographic CRS, and ESPG: 32630 is the metric CRS.
+    https://epsg.io/32630
+    """
     buildings = buildings.to_crs(epsg=32630)
     buildings['area'] = buildings.geometry.area
     buildings = buildings.to_crs(epsg=4326)
@@ -243,30 +249,9 @@ def fetch_building_within_bbox(place_name, latitude, longitude, side_length_km, 
     # Retrieve nodes and edges
     nodes, edges = ox.graph_to_gdfs(graph)
 
-    # check if place_name is a osm id or a place name
-    if place_name[1:].isnumeric():
-        area = ox.geocode_to_gdf(place_name, by_osmid=True)
-    else:
-        area = ox.geocode_to_gdf(place_name)
-
+    area = ox.geocode_to_gdf(place_name)
     if draw:
-        fig, ax = plt.subplots(figsize=(10, 10))
-        area.plot(ax=ax, facecolor="white")
-        edges.plot(ax=ax, linewidth=1, edgecolor="dimgray")
-        ax.set_xlim([west, east])
-        ax.set_ylim([south, north])
-        ax.set_xlabel("longitude")
-        ax.set_ylabel("latitude")
-
-        buildings[address_full_condition].plot(ax=ax, color="red", alpha=0.7, markersize=10, label="Full Address")
-        buildings[~address_full_condition].plot(ax=ax, color="blue", alpha=0.7, markersize=10, label="Partial or None Address")
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            plt.legend()
-        
-        plt.tight_layout()
-        plt.show()
+        plot_geodata(buildings, edges, area, (west, east), (south, north), address_full_condition, "With Full Address", place_name + " Buildings with Full Address")
 
     return buildings, area, nodes, edges
 
