@@ -173,7 +173,11 @@ def fetch_building_within_bbox(place_name, latitude, longitude, side_length_km, 
     # Retrieve nodes and edges
     nodes, edges = ox.graph_to_gdfs(graph)
 
-    area = ox.geocode_to_gdf(place_name)
+    # check if place_name is a osm id or a place name
+    if place_name[1:].isnumeric():
+        area = ox.geocode_to_gdf(place_name, by_osmid=True)
+    else:
+        area = ox.geocode_to_gdf(place_name)
 
     if draw:
         fig, ax = plt.subplots(figsize=(10, 10))
