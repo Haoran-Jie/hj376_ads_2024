@@ -144,7 +144,7 @@ def fetch_houses_within_box(location: tuple[float], side_length_km: float, conn:
         houses_df = pd.read_sql(sql_query, conn)
     return houses_df
 
-def fetch_building_within_bbox(place_name, latitude, longitude, side_length_km):
+def fetch_building_within_bbox(place_name, latitude, longitude, side_length_km, draw=True):
     half_side_length_lat, half_side_length_lon = calculate_half_side_degrees((latitude, longitude), side_length_km)
     north, south, east, west = latitude + half_side_length_lat, latitude - half_side_length_lat, longitude + half_side_length_lon, longitude - half_side_length_lon
     bbox = (north, south, east, west)
@@ -175,22 +175,23 @@ def fetch_building_within_bbox(place_name, latitude, longitude, side_length_km):
 
     area = ox.geocode_to_gdf(place_name)
 
-    fig, ax = plt.subplots(figsize=(10, 10))
-    area.plot(ax=ax, facecolor="white")
-    edges.plot(ax=ax, linewidth=1, edgecolor="dimgray")
-    ax.set_xlim([west, east])
-    ax.set_ylim([south, north])
-    ax.set_xlabel("longitude")
-    ax.set_ylabel("latitude")
+    if draw:
+        fig, ax = plt.subplots(figsize=(10, 10))
+        area.plot(ax=ax, facecolor="white")
+        edges.plot(ax=ax, linewidth=1, edgecolor="dimgray")
+        ax.set_xlim([west, east])
+        ax.set_ylim([south, north])
+        ax.set_xlabel("longitude")
+        ax.set_ylabel("latitude")
 
-    buildings[address_full_condition].plot(ax=ax, color="red", alpha=0.7, markersize=10, label="Full Address")
-    buildings[~address_full_condition].plot(ax=ax, color="blue", alpha=0.7, markersize=10, label="Partial or None Address")
+        buildings[address_full_condition].plot(ax=ax, color="red", alpha=0.7, markersize=10, label="Full Address")
+        buildings[~address_full_condition].plot(ax=ax, color="blue", alpha=0.7, markersize=10, label="Partial or None Address")
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        plt.legend()
-    
-    plt.tight_layout()
-    plt.show()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            plt.legend()
+        
+        plt.tight_layout()
+        plt.show()
 
     return buildings, area, nodes, edges
