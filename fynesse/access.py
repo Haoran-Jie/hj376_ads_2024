@@ -6,6 +6,8 @@ import csv
 import time
 import pandas as pd
 import warnings
+import matplotlib.pyplot as plt
+import osmnx as ox
 
 from .utility import calculate_half_side_degrees
 """
@@ -141,3 +143,54 @@ def fetch_houses_within_box(location: tuple[float], side_length_km: float, conn:
         warnings.simplefilter("ignore")
         houses_df = pd.read_sql(sql_query, conn)
     return houses_df
+
+def fetch_building_within_bbox(place_name, latitude, longitude, side_length_km):
+    half_side_length_lat, half_side_length_lon = calculate_half_side_degrees((latitude, longitude), side_length_km)
+    north, south, east, west = latitude + half_side_length_lat, latitude - half_side_length_lat, longitude + half_side_length_lon, longitude - half_side_length_lon
+    bbox = (north, south, east, west)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        buildings = ox.features_from_bbox(bbox=bbox, tags={'building': True})
+    
+    # Preprocesse OSM building data
+    buildings = buildings[buildings['geometry'].notna()]
+    buildings = buildings.drop_duplicates(subset='geometry')
+    address_full_condition = buildings['addr:housenumber'].notna() & buildings['addr:street'].notna() & buildings['addr:postcode'].notna()
+    
+    address_columns = [col for col in buildings if str(col).startswith('addr:')]
+    buildings = buildings[address_columns + ['geometry', 'building']]
+
+    # Calculate areas: first convert to metric CRS then convert back
+    buildings = buildings.to_crs(epsg=32630)
+    buildings['area'] = buildings.geometry.area
+    buildings = buildings.to_crs(epsg=4326)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        graph = ox.graph_from_bbox(north, south, east, west)
+
+    # Retrieve nodes and edges
+    nodes, edges = ox.graph_to_gdfs(graph)
+
+    area = ox.geocode_to_gdf(place_name)
+
+    fig, ax = plt.subplots(figsize=(10, 10))
+    area.plot(ax=ax, facecolor="white")
+    edges.plot(ax=ax, linewidth=1, edgecolor="dimgray")
+    ax.set_xlim([west, east])
+    ax.set_ylim([south, north])
+    ax.set_xlabel("longitude")
+    ax.set_ylabel("latitude")
+
+    buildings[address_full_condition].plot(ax=ax, color="red", alpha=0.7, markersize=10, label="Full Address")
+    buildings[~address_full_condition].plot(ax=ax, color="blue", alpha=0.7, markersize=10, label="Partial or None Address")
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        plt.legend()
+    
+    plt.tight_layout()
+    plt.show()
+
+    return buildings, area, nodes, edges
