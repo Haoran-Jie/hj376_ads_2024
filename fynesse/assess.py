@@ -5,7 +5,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import warnings
-from .access import fetch_building_within_bbox, create_connection, fetch_houses_within_box
+from .access import create_connection, fetch_houses_within_box
 
 """These are the types of import we might expect in this file
 import pandas
@@ -85,7 +85,8 @@ def filter_by_building_type(matched_df, valid_matches):
 
 
 def filter_and_match(place_name, latitude, longitude, side_length_km, username, password, url):
-
+    
+    from .access import fetch_building_within_bbox
     non_residential_types = ['church', 'shed', 'dormitory', 'hotel', 'construction']
     utility_types = ['entrance', 'service']
     valid_matches = {

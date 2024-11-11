@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 import osmnx as ox
 
 from .utility import calculate_half_side_degrees
-from .assess import plot_geodata
 """
 import httplib2
 import oauth2
@@ -216,6 +215,8 @@ def fetch_houses_within_box(location: tuple[float], side_length_km: float, conn:
     return houses_df
 
 def fetch_building_within_bbox(place_name, latitude, longitude, side_length_km, draw =True):
+    from .assess import plot_geodata
+
     half_side_length_lat, half_side_length_lon = calculate_half_side_degrees((latitude, longitude), side_length_km)
     north, south, east, west = latitude + half_side_length_lat, latitude - half_side_length_lat, longitude + half_side_length_lon, longitude - half_side_length_lon
     bbox = (north, south, east, west)
