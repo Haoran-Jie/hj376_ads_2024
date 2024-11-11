@@ -4,6 +4,10 @@ import requests
 import pymysql
 import csv
 import time
+import pandas as pd
+import warnings
+
+from .utility import calculate_half_side_degrees
 """
 import httplib2
 import oauth2
@@ -98,3 +102,42 @@ def housing_upload_join_data(conn: pymysql.connections.Connection, year: int):
   conn.commit()
   print('Data stored for year: ' + str(year))
   cur.close()
+
+
+
+def fetch_houses_within_box(location: tuple[float], side_length_km: float, conn: pymysql.connections.Connection, since_date: str = '2020-01-01') -> pd.DataFrame:
+    """
+    Fetch houses data from the database within a square box centered around a location.
+
+    Parameters:
+    location (tuple): A tuple containing the latitude and longitude of the center of the box.
+    side_length_km (float): The side length of the square box in kilometers.
+    conn (pymysql.connections.Connection): A connection to the database.
+
+    Returns:
+    DataFrame: A Pandas DataFrame containing the fetched houses data.
+    """
+
+    latitude, longitude = location
+
+    # Calculate the half side length in degrees
+    half_side_length_lat, half_side_length_lon = calculate_half_side_degrees(location, side_length_km)
+
+    sql_query = f"""
+    SELECT pp.*
+    FROM pp_data pp
+    JOIN postcode_data pc ON pp.postcode = pc.postcode
+    WHERE
+        pc.latitude BETWEEN {latitude - half_side_length_lat} AND {latitude + half_side_length_lat}
+        AND pc.longitude BETWEEN {longitude - half_side_length_lon} AND {longitude + half_side_length_lon}
+        AND pp.date_of_transfer >= '{since_date}';
+    """
+    
+    """
+    UserWarning: pandas only supports SQLAlchemy connectable (engine/connection) or database string URI or sqlite3 DBAPI2 connection. Other DBAPI2 objects are not tested. Please consider using SQLAlchemy. 
+    houses_df = pd.read_sql(sql_query, conn)
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        houses_df = pd.read_sql(sql_query, conn)
+    return houses_df
