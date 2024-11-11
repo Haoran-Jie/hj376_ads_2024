@@ -249,8 +249,12 @@ def fetch_building_within_bbox(place_name, latitude, longitude, side_length_km, 
 
     # Retrieve nodes and edges
     nodes, edges = ox.graph_to_gdfs(graph)
-
-    area = ox.geocode_to_gdf(place_name)
+    
+    # check if place_name is OSM_id to get area
+    if place_name[1:].isnumeric():
+        area = ox.geocode_to_gdf(place_name, by_osmid=True)
+    else:
+        area = ox.geocode_to_gdf(place_name)
     if draw:
         plot_geodata(buildings, edges, area, (west, east), (south, north), address_full_condition, "With Full Address", place_name + " Buildings with Full Address")
 
