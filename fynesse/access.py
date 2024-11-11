@@ -107,7 +107,7 @@ def housing_upload_join_data(conn: pymysql.connections.Connection, year: int):
 
 
 
-def fetch_houses_within_box(location: tuple[float], side_length_km: float, conn: pymysql.connections.Connection, since_date: str = '2020-01-01') -> pd.DataFrame:
+def fetch_houses_within_box(location: tuple[float], side_length_km: float, conn: pymysql.connections.Connection, since_date: str = '2020-01-01', inflation_correction = True) -> pd.DataFrame:
     """
     Fetch houses data from the database within a square box centered around a location.
 
@@ -119,7 +119,6 @@ def fetch_houses_within_box(location: tuple[float], side_length_km: float, conn:
     Returns:
     DataFrame: A Pandas DataFrame containing the fetched houses data.
     """
-
     latitude, longitude = location
 
     # Calculate the half side length in degrees
@@ -142,6 +141,77 @@ def fetch_houses_within_box(location: tuple[float], side_length_km: float, conn:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         houses_df = pd.read_sql(sql_query, conn)
+
+    # inflation_correction
+    """Year	 Inflation	Multiplier
+        2024		    1.00
+        2023	9.7%	1.10
+        2022	11.6%	1.22
+        2021	4.1%	1.27
+        2020	1.5%	1.29
+        2019	2.6%	1.33
+        2018	3.3%	1.37
+        2017	3.6%	1.42
+        2016	1.8%	1.45
+        2015	1.0%	1.46
+        2014	2.4%	1.50
+        2013	3.0%	1.54
+        2012	3.2%	1.59
+        2011	5.2%	1.67
+        2010	4.6%	1.75
+        2009	−0.5%	1.74
+        2008	4.0%	1.81
+        2007	4.3%	1.89
+        2006	3.2%	1.95
+        2005	2.8%	2.00
+        2004	3.0%	2.06
+        2003	2.9%	2.12
+        2002	1.7%	2.16
+        2001	1.8%	2.20
+        2000	3.0%	2.26
+        1999	1.5%	2.30
+        1998	3.4%	2.38
+        1997	3.1%	2.45
+        1996	2.4%	2.51
+        1995	3.5%	2.60
+    """
+    multiplier_map = {
+        2024: 1.00,
+        2023: 1.10,
+        2022: 1.22,
+        2021: 1.27,
+        2020: 1.29,
+        2019: 1.33,
+        2018: 1.37,
+        2017: 1.42,
+        2016: 1.45,
+        2015: 1.46,
+        2014: 1.50,
+        2013: 1.54,
+        2012: 1.59,
+        2011: 1.67,
+        2010: 1.75,
+        2009: 1.74,
+        2008: 1.81,
+        2007: 1.89,
+        2006: 1.95,
+        2005: 2.00,
+        2004: 2.06,
+        2003: 2.12,
+        2002: 2.16,
+        2001: 2.20,
+        2000: 2.26,
+        1999: 2.30,
+        1998: 2.38,
+        1997: 2.45,
+        1996: 2.51,
+        1995: 2.60
+    }
+    if inflation_correction:
+        # Extract the year from the date_of_transfer column
+        houses_df['year'] = pd.to_datetime(houses_df['date_of_transfer']).dt.year
+        houses_df['price'] = houses_df.apply(lambda row: row['price'] * multiplier_map.get(row['year'], 1.0), axis=1)
+
     return houses_df
 
 def fetch_building_within_bbox(place_name, latitude, longitude, side_length_km, draw=True):
@@ -199,3 +269,74 @@ def fetch_building_within_bbox(place_name, latitude, longitude, side_length_km, 
         plt.show()
 
     return buildings, area, nodes, edges
+
+def count_pois_near_coordinates(latitude: float, longitude: float, tags: dict, distance_km: float = 1.0) -> dict:
+    """
+    Count Points of Interest (POIs) near a given pair of coordinates within a specified distance.
+    Args:
+        latitude (float): Latitude of the location.
+        longitude (float): Longitude of the location.
+        tags (dict): A dictionary of OSM tags to filter the POIs (e.g., {'amenity': True, 'tourism': True}).
+        distance_km (float): The distance around the location in kilometers. Default is 1 km.
+    Returns:
+        dict: A dictionary where keys are the OSM tags and values are the counts of POIs for each tag.
+    """
+    pois = ox.features_from_point((latitude, longitude), tags=tags, dist=distance_km*1000)
+    poi_counts = {}
+    for tag in tags.keys():
+        if tag in pois.columns:
+            poi_counts[tag] = pois[tag].notnull().sum()
+        else:
+            poi_counts[tag] = 0
+
+    return poi_counts
+
+def count_specific_pois_near_coordinates(latitude: float, longitude: float, tags: dict, subtags: dict, distance_km: float = 1.0) -> dict:
+    """
+    Count Points of Interest (POIs) near a given pair of coordinates within a specified distance.
+    Args:
+        latitude (float): Latitude of the location.
+        longitude (float): Longitude of the location.
+        tags (dict): A dictionary of OSM tags to filter the POIs (e.g., {'amenity': True, 'tourism': True}).
+        distance_km (float): The distance around the location in kilometers. Default is 1 km.
+    Returns:
+        dict: A dictionary where keys are the OSM tags (or tags+subtag) and values are the counts of POIs for each tag/(tags+subtag).
+    """
+    pois = ox.features_from_point((latitude, longitude), tags=(tags | subtags), dist=distance_km*1000)
+    poi_counts = {}
+    for tag in tags.keys():
+        if tag in pois.columns:
+            poi_counts[tag] = pois[tag].notnull().sum()
+        else:
+            poi_counts[tag] = 0
+    for tag in subtags.keys():
+        if tag in pois.columns:
+            for subtag in subtags[tag]:
+                poi_counts[tag + ":" + subtag] = len(pois[pois[tag] == subtag])
+
+    return poi_counts
+
+def multi_location_poi_counts(locations_dict: dict, tags: dict, subtags: dict = None) -> pd.DataFrame:
+    """
+    Count Points of Interest (POIs) near multiple locations.
+    Args:
+        locations_dict (dict): A dictionary where keys are the location names and values are tuples of (latitude, longitude).
+        tags (dict): A dictionary of OSM tags to filter the POIs (e.g., {'amenity': True, 'tourism': True}).
+    Returns:
+        pd.DataFrame: A dataframe where each row contains the counts of POIs for each tag at a given location.
+    """
+    combined_df = pd.DataFrame()
+    if subtags is None:
+        for location, (latitude, longitude) in locations_dict.items():
+            poi_counts = count_pois_near_coordinates(latitude, longitude, tags)
+            poi_counts_df = pd.DataFrame(list(poi_counts.items()), columns=['POI Type', 'Count'])
+            poi_counts_df['Location'] = location
+            combined_df = pd.concat([combined_df, poi_counts_df], ignore_index=True)
+    else:
+        for location, (latitude, longitude) in locations_dict.items():
+            poi_counts = count_specific_pois_near_coordinates(latitude, longitude, tags, subtags)
+            poi_counts_df = pd.DataFrame(list(poi_counts.items()), columns=['POI Type', 'Count'])
+            poi_counts_df['Location'] = location
+            combined_df = pd.concat([combined_df, poi_counts_df], ignore_index=True)
+
+    return combined_df
