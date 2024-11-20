@@ -5,6 +5,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import warnings
+import numpy as np
 from .access import create_connection, fetch_houses_within_box
 
 """These are the types of import we might expect in this file
@@ -174,3 +175,34 @@ def plot_geodata(geodf, edges, area, xlim, ylim, condition=None, label = None, t
     plt.title(title)
     plt.tight_layout()
     plt.show()
+
+def plot_regularization_results(ridge_df, lasso_df, baseline_rmse, baseline_r2):
+    """
+    Plot the regularization results for Ridge and Lasso models.
+    """
+    fig, axs = plt.subplots(1, 2, figsize=(18, 6))
+
+    # RMSE Plot
+    axs[0].plot(ridge_df['alpha'], ridge_df['rmse'], marker='o', label='Ridge RMSE', color='b')
+    axs[0].plot(lasso_df['alpha'], lasso_df['rmse'], marker='o', label='Lasso RMSE', color='r')
+    axs[0].axhline(baseline_rmse, color='g', linestyle='--', label='Baseline RMSE')
+    axs[0].set_xscale('log')
+    axs[0].set_ylabel('RMSE')
+    axs[0].set_xlabel('Alpha (Regularization Strength)')
+    axs[0].legend()
+    axs[0].grid(True)
+
+    # R² Plot
+    axs[1].plot(ridge_df['alpha'], ridge_df['r2'], marker='o', label='Ridge R²', color='b')
+    axs[1].plot(lasso_df['alpha'], lasso_df['r2'], marker='o', label='Lasso R²', color='r')
+    axs[1].axhline(baseline_r2, color='g', linestyle='--', label='Baseline R²')
+    axs[1].set_xscale('log')
+    axs[1].set_ylabel('R²')
+    axs[1].set_xlabel('Alpha (Regularization Strength)')
+    axs[1].legend()
+    axs[1].grid(True)
+
+    plt.show()
+
+def calculate_corr(y, y_pred):
+    return np.corrcoef(y, y_pred)[0, 1]
