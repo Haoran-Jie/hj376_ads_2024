@@ -131,7 +131,7 @@ def calculate_and_visualise_correlation(final_matched_df, x_col, y_col, x_log=Fa
         plt.xscale('log')
     if y_log:
         plt.yscale('log')
-    plt.title(f"Scatter Plot of {y_col} vs. {x_col} (Log Scale)\nCorrelation: {corr:.2f}")
+    plt.title(f"Scatter Plot of {y_col} vs. {x_col} \nCorrelation: {corr:.2f}")
     plt.xlabel(x_col + " (log scale)" if x_log else x_col)
     plt.ylabel(y_col + " (log scale)" if y_log else y_col)
     if hue_col is not None:
