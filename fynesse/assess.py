@@ -206,3 +206,22 @@ def plot_regularization_results(ridge_df, lasso_df, baseline_rmse, baseline_r2):
 
 def calculate_corr(y, y_pred):
     return np.corrcoef(y, y_pred)[0, 1]
+
+
+def plot_coefficients(coefficients_df):
+    """
+    Plot the coefficients for each feature across age groups.
+    """
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    for col in coefficients_df.columns:
+        ax.plot(range(100), coefficients_df[col], label=col)
+
+    ax.set_xlabel("Age Group")
+    ax.set_ylabel("Coefficient Value")
+    ax.set_title("Model Coefficients Across Age Groups")
+    ax.legend(loc="upper right", fontsize="small")
+    ax.grid(True)
+
+    plt.tight_layout()
+    plt.show()
