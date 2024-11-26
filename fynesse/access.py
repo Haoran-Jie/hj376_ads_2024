@@ -366,11 +366,12 @@ def read_sql_ignoring_warnings(query, con, *args, **kwargs):
         return pd.read_sql(query, con, *args, **kwargs)
     
 
-def execute_query(connection: pymysql.connections.Connection, query: str):
+def execute_query(connection: pymysql.connections.Connection, query: str, commit: bool = True):
     try:
         with connection.cursor() as cursor:
             cursor.execute(query)
-        connection.commit()
+        if commit:
+            connection.commit()
         print(f"Query executed successfully:\n{query}")
     except Exception as e:
         print(f"Error executing query:\n{query}\nError: {e}")
