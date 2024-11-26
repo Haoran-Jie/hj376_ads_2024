@@ -7,6 +7,11 @@ import matplotlib.pyplot as plt
 import warnings
 import numpy as np
 from .access import create_connection, fetch_houses_within_box
+import logging
+from tabulate import tabulate
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger()
 
 """These are the types of import we might expect in this file
 import pandas
@@ -225,3 +230,60 @@ def plot_coefficients(coefficients_df):
 
     plt.tight_layout()
     plt.show()
+
+
+def remove_duplicate_columns(df, dataset_name="DataFrame"):
+    """Remove duplicate columns from the DataFrame."""
+    if df.columns.duplicated().any():
+        duplicate_cols = df.columns[df.columns.duplicated()].tolist()
+        logger.info(f"{dataset_name}: Duplicate columns identified for removal: {duplicate_cols}")
+        deduplicated_df = df.loc[:, ~df.columns.duplicated()]
+        logger.info(f"{dataset_name}: Removed duplicate columns. New shape: {deduplicated_df.shape}")
+        return deduplicated_df
+    else:
+        logger.info(f"{dataset_name}: No duplicate columns identified.")
+        return df
+
+def remove_empty_columns(df, dataset_name="DataFrame"):
+    """Remove columns with all zero values."""
+    empty_columns = df.columns[(df == 0).all()]
+    if empty_columns.empty:
+        logger.info(f"{dataset_name}: No empty columns identified.")
+        return df, empty_columns
+    logger.info(f"{dataset_name}: Empty columns identified for removal: {empty_columns.tolist()}")
+    cleaned_df = df.drop(columns=empty_columns)
+    logger.info(f"{dataset_name}: Shape after removing empty columns: {cleaned_df.shape}")
+    return cleaned_df, empty_columns
+
+def update_non_empty_tags(refined_tags, df):
+    """Update refined_tags to include only tags with non-zero values."""
+    non_empty_tags = {
+        tag: [
+            value for value in refined_tags[tag]
+            if f"{tag}_{value}" in df.columns and df[f"{tag}_{value}"].sum() > 0
+        ]
+        for tag in refined_tags
+    }
+    return non_empty_tags
+
+def find_rows_with_all_zeros(df, feature_columns, dataset_name="DataFrame"):
+    """Identify rows with all zero values in specific columns."""
+    rows_with_all_zeros = df.index[(df[feature_columns] == 0).all(axis=1)]
+    logger.info(f"{dataset_name}: Rows with all zeros in feature columns: {len(rows_with_all_zeros)} out of {df.shape[0]}")
+    return rows_with_all_zeros
+
+def check_columns_types(df, columns, expected_types, dataset_name="DataFrame"):
+    """Check the data types of columns in the DataFrame."""
+    logger.info(f"{dataset_name}: Checking data types for {len(columns)} columns...")
+    issues = []
+    
+    for column, expected_type in zip(columns, expected_types):
+        actual_type = df[column].dtype
+        if actual_type != expected_type:
+            issues.append([column, str(expected_type), str(actual_type)])
+    
+    if issues:
+        logger.warning(f"{dataset_name}: Found {len(issues)} type mismatches:")
+        print(tabulate(issues, headers=["Column", "Expected Type", "Actual Type"], tablefmt="pretty"))
+    else:
+        logger.info(f"{dataset_name}: All columns have expected data types.")
