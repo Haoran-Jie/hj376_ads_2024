@@ -287,3 +287,90 @@ def check_columns_types(df, columns, expected_types, dataset_name="DataFrame"):
         print(tabulate(issues, headers=["Column", "Expected Type", "Actual Type"], tablefmt="pretty"))
     else:
         logger.info(f"{dataset_name}: All columns have expected data types.")
+
+def calculate_and_visualise_correlations(
+    data, analyses, grid_size=None, figsize=(16, 10)
+):
+    import math
+    """
+    Generalized function to calculate and visualize correlations in subplots.
+
+    Parameters:
+        data: pandas DataFrame containing the data.
+        analyses: List of dictionaries, each specifying:
+            - x_col: Column for the x-axis.
+            - y_col: Column for the y-axis.
+            - filtering_condition (optional): Filtering condition for the data.
+            - x_log (optional): Whether to use a log scale for the x-axis.
+            - y_log (optional): Whether to use a log scale for the y-axis.
+            - hue_col (optional): Column for hue in scatterplots.
+        grid_size (optional): Tuple specifying (rows, cols) for the subplot grid. Automatically calculated if not provided.
+        figsize: Tuple specifying the overall figure size.
+    """
+    # Determine grid size automatically if not specified
+    num_analyses = len(analyses)
+    if grid_size is None:
+        cols = math.ceil(math.sqrt(num_analyses))
+        rows = math.ceil(num_analyses / cols)
+    else:
+        rows, cols = grid_size
+
+    # Create subplots
+    fig, axes = plt.subplots(rows, cols, figsize=figsize)
+    axes = axes.flatten()  # Flatten in case of a grid
+
+    for i, analysis in enumerate(analyses):
+        if i >= len(axes):  # Avoid index out of range in case of excess analyses
+            break
+
+        # Extract parameters for the analysis
+        x_col = analysis["x_col"]
+        y_col = analysis["y_col"]
+        filtering_condition = analysis.get("filtering_condition", None)
+        x_log = analysis.get("x_log", False)
+        y_log = analysis.get("y_log", False)
+        hue_col = analysis.get("hue_col", None)
+
+        # Apply filtering if specified
+        filtered_data = data
+        if filtering_condition is not None:
+            filtered_data = filtered_data[filtering_condition]
+
+        # Calculate correlation
+        if not filtered_data.empty:
+            corr = filtered_data[x_col].corr(filtered_data[y_col])
+        else:
+            corr = float("nan")
+            print(f"No data left after filtering for analysis {i+1}.")
+
+        # Plot scatter and regression
+        sns.scatterplot(
+            data=filtered_data, x=x_col, y=y_col, hue=hue_col, alpha=0.6, ax=axes[i]
+        )
+        sns.regplot(
+            data=filtered_data,
+            x=x_col,
+            y=y_col,
+            scatter=False,
+            ax=axes[i],
+            color="blue",
+        )
+
+        # Log scale adjustments
+        if x_log:
+            axes[i].set_xscale("log")
+        if y_log:
+            axes[i].set_yscale("log")
+
+        # Titles and labels
+        axes[i].set_title(f"{y_col} vs {x_col}\nCorrelation: {corr:.2f}")
+        axes[i].set_xlabel(x_col + " (log scale)" if x_log else x_col)
+        axes[i].set_ylabel(y_col + " (log scale)" if y_log else y_col)
+
+    # Hide unused subplots
+    for j in range(i + 1, len(axes)):
+        axes[j].axis("off")
+
+    # Adjust layout
+    plt.tight_layout()
+    plt.show()
