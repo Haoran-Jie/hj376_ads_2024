@@ -364,3 +364,52 @@ def read_sql_ignoring_warnings(query, con, *args, **kwargs):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         return pd.read_sql(query, con, *args, **kwargs)
+    
+
+def execute_query(connection: pymysql.connections.Connection, query: str):
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(query)
+        connection.commit()
+        print(f"Query executed successfully:\n{query}")
+    except Exception as e:
+        print(f"Error executing query:\n{query}\nError: {e}")
+
+
+def load_csv_to_table(connection: pymysql.connections.Connection, table_name: str, file_path: str, columns: str, ignore_rows: int = 1):
+    query = f"""
+    LOAD DATA LOCAL INFILE '{file_path}'
+    INTO TABLE {table_name}
+    FIELDS TERMINATED BY ',' 
+    OPTIONALLY ENCLOSED BY '"' 
+    LINES TERMINATED BY '\\n'
+    IGNORE {ignore_rows} ROWS
+    ({columns});
+    """
+    execute_query(connection, query) 
+
+def load_csv_to_table_with_geometry_conversion(connection: pymysql.connections.Connection, table_name: str, file_path: str, columns: str, ignore_rows: int = 1):
+
+    # Step 1: Load CSV data into the table
+    load_csv_to_table(connection, table_name, file_path, columns, ignore_rows)
+
+    # Step 2: Convert WKT to GEOMETRY in the `geom` column
+    update_query = f"""
+    UPDATE {table_name}
+    SET geom = ST_GeomFromText(geometry_wkt)
+    WHERE geometry_wkt IS NOT NULL;
+    """
+    execute_query(connection, update_query)
+
+def create_table(connection: pymysql.connections.Connection, create_query: str):
+    execute_query(connection, create_query)
+
+def create_index(connection: pymysql.connections.Connection, table_name: str, column_name: str | list[str]):
+    if isinstance(column_name, list):
+        column_name_index = "_".join(column_name)
+        column_name = ["`" + column + "`" for column in column_name]
+        column_name = ", ".join(column_name)
+    else:
+        column_name_index = column_name
+    query = f"CREATE INDEX IF NOT EXISTS idx_{table_name}_{column_name_index} ON {table_name} ({column_name});"
+    execute_query(connection, query)

@@ -120,16 +120,16 @@ def filter_and_match(place_name, latitude, longitude, side_length_km, username, 
     return final_matched_df
 
 
-def calculate_and_visualise_correlation(final_matched_df, x_col, y_col, x_log=False, y_log=False, hue_col=None, filtering_condition=None):
+def calculate_and_visualise_correlation(final_matched_df, x_col, y_col, x_log=False, y_log=False, hue_col=None, filtering_condition=None, figsize=(10, 6)): 
     """Calculate and visualise the correlation between two columns in the DataFrame."""
-
-    corr = final_matched_df[x_col].corr(final_matched_df[y_col])
-    print(f"Correlation between {x_col} and {y_col}: {corr:.2f}")
 
     if filtering_condition is not None:
         final_matched_df = final_matched_df[filtering_condition]
 
-    plt.figure(figsize=(10, 6))
+    corr = final_matched_df[x_col].corr(final_matched_df[y_col])
+    print(f"Correlation between {x_col} and {y_col}: {corr:.2f}")
+
+    plt.figure(figsize=figsize)
     sns.scatterplot(data=final_matched_df, x=x_col, y=y_col, hue=hue_col, alpha=0.6)
     sns.regplot(data=final_matched_df, x=x_col, y=y_col, scatter=False)
     if x_log:
