@@ -410,7 +410,7 @@ def plot_geometry_with_buffer_and_buildings(geometry, ax=None, title=None):
         mpl_polygon = MplPolygon(
             list(geometry.exterior.coords),
             closed=True,
-            edgecolor="darkgrey",
+            edgecolor="black",
             linestyle="--",
             linewidth=2,
             fill=False,  # Don't fill the polygon
