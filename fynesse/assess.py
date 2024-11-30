@@ -409,7 +409,7 @@ def plot_geometry_with_buffer_and_features(geometry, ax=None, title=None):
         fig, ax = plt.subplots(figsize=(10, 10))
 
     # Plot the buffered bbox
-    bbox_graph = ox.graph_from_bbox(buffered_maxy, buffered_miny, buffered_maxx, buffered_minx, network_type="all")
+    bbox_graph = ox.graph_from_bbox(bbox=bbox, network_type="all")
     edges = ox.graph_to_gdfs(bbox_graph, nodes=False)
     edges.plot(ax=ax, linewidth=0.5, edgecolor="dimgray")
 
