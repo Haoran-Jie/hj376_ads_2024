@@ -9,6 +9,12 @@ import numpy as np
 from .access import create_connection, fetch_houses_within_box
 import logging
 from tabulate import tabulate
+import osmnx as ox
+import geopandas as gpd
+from shapely.geometry import box, Polygon, Point
+import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
+from matplotlib.patches import Polygon as MplPolygon
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger()
@@ -348,5 +354,90 @@ def calculate_and_visualise_correlations(
         axes[j].axis("off")
 
     # Adjust layout
+    plt.tight_layout()
+    plt.show()
+
+
+        
+        
+def plot_geometry_with_buffer_and_buildings(geometry, title = None):
+    """
+    Plots the bounding box of a geometry object with a 1km buffer, retrieves building features,
+    and visualizes buildings sorted by their values with the top five categories in distinct colors.
+    """
+    # Calculate the bounding box of the geometry
+    minx, miny, maxx, maxy = geometry.bounds
+    
+    # Add a 1km buffer to the bounding box using fynesse
+    buffer_km = 1  # Buffer distance in km
+    dy, dx = fynesse.utility.calculate_half_side_degrees(((miny + maxy) / 2, (minx + maxx) / 2), buffer_km)
+    buffered_bbox = box(minx - dx, miny - dy, maxx + dx, maxy + dy)
+    
+    # Extract the buffered bbox coordinates
+    buffered_minx, buffered_miny, buffered_maxx, buffered_maxy = buffered_bbox.bounds
+
+    # Get building features within the buffered bbox
+    bbox = (buffered_minx, buffered_miny, buffered_maxx, buffered_maxy)
+    buildings = ox.features_from_bbox(bbox, tags={"building": True})
+
+    # Count the occurrences of each building type
+    building_counts = buildings["building"].value_counts()
+
+    # Identify the top 5 building types
+    top_building_types = building_counts.head(5).index
+
+    # Assign colors for the top 5 types
+    building_colors = {}
+    for i, btype in enumerate(top_building_types):
+        building_colors[btype] = f"C{i}"  # Matplotlib default colors (C0, C1, ...)
+
+    # Plot the graph and buildings
+    fig, ax = plt.subplots(figsize=(10, 10))
+
+   # Plot the buffered bbox
+    bbox_graph = ox.graph_from_bbox(bbox, network_type="all")
+    edges = ox.graph_to_gdfs(bbox_graph, nodes=False)
+    edges.plot(ax=ax, linewidth=0.5, edgecolor="dimgray")
+
+    if isinstance(geometry, Polygon):
+        mpl_polygon = MplPolygon(
+            list(geometry.exterior.coords),
+            closed=True,
+            edgecolor="darkgrey",
+            linestyle="--",
+            linewidth=2,
+            fill=False,  # Don't fill the polygon
+            label="Polygon Boundary"
+        )
+        ax.add_patch(mpl_polygon)
+
+    # Create legend elements manually
+    legend_elements = []
+
+    # Plot the buildings
+    for btype in top_building_types:
+        buildings[buildings["building"] == btype].plot(
+            ax=ax, color=building_colors[btype], label=btype, alpha=0.7
+        )
+        legend_elements.append(Patch(facecolor=building_colors[btype], edgecolor='black', label=btype))
+
+    # Plot the remaining buildings in gray
+    remaining_buildings = ~buildings["building"].isin(top_building_types)
+    buildings[remaining_buildings].plot(ax=ax, color="lightgray", label="Other", alpha=0.5)
+    legend_elements.append(Patch(facecolor="lightgray", edgecolor='black', label="Other"))
+
+    # Add custom legend
+    ax.legend(handles=legend_elements, title="Building Types")
+
+    # Set labels and limits
+    ax.set_xlim([buffered_minx, buffered_maxx])
+    ax.set_ylim([buffered_miny, buffered_maxy])
+    ax.set_xlabel("Longitude")
+    ax.set_ylabel("Latitude")
+    if title is not None:
+        ax.set_title(title)
+    else:
+      ax.set_title("Buildings within Buffered BBox")
+    
     plt.tight_layout()
     plt.show()
