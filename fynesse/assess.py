@@ -399,7 +399,7 @@ def plot_geometry_with_buffer_and_features(geometry, ax=None, title=None):
     # Assign colors for the top 5 building types (avoiding green)
     building_colors = {}
     for i, btype in enumerate(top_building_types):
-        building_colors[btype] = f"C{i + 1}"  # Skip C0 (green) to avoid conflict
+        building_colors[btype] = (f"C{i}" if i < 2 else f"C{i+1}")    # Skip C2 (green) to avoid conflict
 
     # Assign green color for landuse types
     landuse_color = "green"
