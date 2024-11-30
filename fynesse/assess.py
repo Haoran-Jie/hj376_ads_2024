@@ -361,10 +361,14 @@ def calculate_and_visualise_correlations(
 
         
         
-def plot_geometry_with_buffer_and_buildings(geometry, title = None):
+def plot_geometry_with_buffer_and_buildings(geometry, ax=None, title=None):
     """
     Plots the bounding box of a geometry object with a 1km buffer, retrieves building features,
     and visualizes buildings sorted by their values with the top five categories in distinct colors.
+    Parameters:
+        geometry (shapely.geometry.Polygon): The geometry object to process.
+        ax (matplotlib.axes.Axes, optional): The axis to plot on. Creates a new one if None.
+        title (str, optional): Title for the plot.
     """
     # Calculate the bounding box of the geometry
     minx, miny, maxx, maxy = geometry.bounds
@@ -392,14 +396,16 @@ def plot_geometry_with_buffer_and_buildings(geometry, title = None):
     for i, btype in enumerate(top_building_types):
         building_colors[btype] = f"C{i}"  # Matplotlib default colors (C0, C1, ...)
 
-    # Plot the graph and buildings
-    fig, ax = plt.subplots(figsize=(10, 10))
+    # Create the axis if not provided
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 10))
 
-   # Plot the buffered bbox
-    bbox_graph = ox.graph_from_bbox(bbox, network_type="all")
+    # Plot the buffered bbox
+    bbox_graph = ox.graph_from_bbox(buffered_maxy, buffered_miny, buffered_maxx, buffered_minx, network_type="all")
     edges = ox.graph_to_gdfs(bbox_graph, nodes=False)
     edges.plot(ax=ax, linewidth=0.5, edgecolor="dimgray")
 
+    # Plot the polygon boundary if the geometry is a polygon
     if isinstance(geometry, Polygon):
         mpl_polygon = MplPolygon(
             list(geometry.exterior.coords),
@@ -438,7 +444,4 @@ def plot_geometry_with_buffer_and_buildings(geometry, title = None):
     if title is not None:
         ax.set_title(title)
     else:
-      ax.set_title("Buildings within Buffered BBox")
-    
-    plt.tight_layout()
-    plt.show()
+        ax.set_title("Buildings within Buffered BBox")
