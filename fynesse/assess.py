@@ -361,10 +361,11 @@ def calculate_and_visualise_correlations(
 
         
         
-def plot_geometry_with_buffer_and_buildings(geometry, ax=None, title=None):
+def plot_geometry_with_buffer_and_features(geometry, ax=None, title=None):
     """
-    Plots the bounding box of a geometry object with a 1km buffer, retrieves building features,
-    and visualizes buildings sorted by their values with the top five categories in distinct colors.
+    Plots the bounding box of a geometry object with a 1km buffer, retrieves building and landuse features,
+    and visualizes them with specified colors.
+    
     Parameters:
         geometry (shapely.geometry.Polygon): The geometry object to process.
         ax (matplotlib.axes.Axes, optional): The axis to plot on. Creates a new one if None.
@@ -381,9 +382,13 @@ def plot_geometry_with_buffer_and_buildings(geometry, ax=None, title=None):
     # Extract the buffered bbox coordinates
     buffered_minx, buffered_miny, buffered_maxx, buffered_maxy = buffered_bbox.bounds
 
-    # Get building features within the buffered bbox
+    # Get building and landuse features within the buffered bbox
     bbox = (buffered_minx, buffered_miny, buffered_maxx, buffered_maxy)
-    buildings = ox.features_from_bbox(bbox = bbox, tags={"building": True})
+    buildings = ox.features_from_bbox(bbox=bbox, tags={"building": True})
+    landuse = ox.features_from_bbox(
+        bbox=bbox,
+        tags={"landuse": ["meadow", "farmland", "grass", "forest"]}
+    )
 
     # Count the occurrences of each building type
     building_counts = buildings["building"].value_counts()
@@ -391,17 +396,20 @@ def plot_geometry_with_buffer_and_buildings(geometry, ax=None, title=None):
     # Identify the top 5 building types
     top_building_types = building_counts.head(5).index
 
-    # Assign colors for the top 5 types
+    # Assign colors for the top 5 building types (avoiding green)
     building_colors = {}
     for i, btype in enumerate(top_building_types):
-        building_colors[btype] = f"C{i}"  # Matplotlib default colors (C0, C1, ...)
+        building_colors[btype] = f"C{i + 1}"  # Skip C0 (green) to avoid conflict
+
+    # Assign green color for landuse types
+    landuse_color = "green"
 
     # Create the axis if not provided
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 10))
 
     # Plot the buffered bbox
-    bbox_graph = ox.graph_from_bbox(bbox=bbox, network_type="all")
+    bbox_graph = ox.graph_from_bbox(buffered_maxy, buffered_miny, buffered_maxx, buffered_minx, network_type="all")
     edges = ox.graph_to_gdfs(bbox_graph, nodes=False)
     edges.plot(ax=ax, linewidth=0.5, edgecolor="dimgray")
 
@@ -424,17 +432,21 @@ def plot_geometry_with_buffer_and_buildings(geometry, ax=None, title=None):
     # Plot the buildings
     for btype in top_building_types:
         buildings[buildings["building"] == btype].plot(
-            ax=ax, color=building_colors[btype], label=btype, alpha=0.7
+            ax=ax, color=building_colors[btype], label=f"Building: {btype}", alpha=0.7
         )
         legend_elements.append(Patch(facecolor=building_colors[btype], edgecolor='black', label=btype))
 
     # Plot the remaining buildings in gray
     remaining_buildings = ~buildings["building"].isin(top_building_types)
-    buildings[remaining_buildings].plot(ax=ax, color="lightgray", label="Other", alpha=0.5)
-    legend_elements.append(Patch(facecolor="lightgray", edgecolor='black', label="Other"))
+    buildings[remaining_buildings].plot(ax=ax, color="lightgray", label="Other Buildings", alpha=0.5)
+    legend_elements.append(Patch(facecolor="lightgray", edgecolor='black', label="Other Buildings"))
+
+    # Plot the landuse features in green
+    landuse.plot(ax=ax, color=landuse_color, label="Landuse (green areas)", alpha=0.5)
+    legend_elements.append(Patch(facecolor=landuse_color, edgecolor='black', label="Landuse"))
 
     # Add custom legend
-    ax.legend(handles=legend_elements, title="Building Types")
+    ax.legend(handles=legend_elements, title="Legend")
 
     # Set labels and limits
     ax.set_xlim([buffered_minx, buffered_maxx])
@@ -444,4 +456,4 @@ def plot_geometry_with_buffer_and_buildings(geometry, ax=None, title=None):
     if title is not None:
         ax.set_title(title)
     else:
-        ax.set_title("Buildings within Buffered BBox")
+        ax.set_title("Buildings and Landuse within Buffered BBox")
