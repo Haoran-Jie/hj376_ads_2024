@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import warnings
 import numpy as np
 from .access import create_connection, fetch_houses_within_box
+from .utility import calculate_half_side_degrees
 import logging
 from tabulate import tabulate
 import osmnx as ox
@@ -370,7 +371,7 @@ def plot_geometry_with_buffer_and_buildings(geometry, title = None):
     
     # Add a 1km buffer to the bounding box using fynesse
     buffer_km = 1  # Buffer distance in km
-    dy, dx = fynesse.utility.calculate_half_side_degrees(((miny + maxy) / 2, (minx + maxx) / 2), buffer_km)
+    dy, dx = calculate_half_side_degrees(((miny + maxy) / 2, (minx + maxx) / 2), buffer_km)
     buffered_bbox = box(minx - dx, miny - dy, maxx + dx, maxy + dy)
     
     # Extract the buffered bbox coordinates
