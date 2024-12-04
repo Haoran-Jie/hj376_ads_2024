@@ -171,6 +171,11 @@ def get_osm_features_counts(oa_geo: gpd.GeoDataFrame, features: list, tags: dict
         for key, values in tags.items() for value in values
     }
 
+    new_columns.update({
+    f"{key}": joined["tags"].apply(lambda x: int(key in x))
+    for key, values in tags.items() if not values
+    })
+
     # Create a DataFrame from the new columns
     new_columns_df = pd.DataFrame(new_columns)
 

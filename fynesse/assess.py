@@ -20,6 +20,11 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.neighbors import BallTree
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
+from scipy.stats import skew, kurtosis, probplot
+import scipy.stats as stats
+from scipy.stats import linregress
+from scipy.interpolate import interp1d, CubicSpline
+from .constants import *
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger()
@@ -1059,5 +1064,820 @@ def plot_correlation_improvement(
     # Add grid
     ax.grid(axis="y", linestyle="--", alpha=0.6)
 
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_turnout_distribution(
+    election_results,
+    turnout_column="Turnout_rate",
+    party_column="First_party",
+    party_colors=None,
+    bins=np.arange(40, 76, 1),
+    title="Distribution of Turnout Rate by Winning Party",
+    figsize=(12, 8)
+):
+    """
+    Plot a stacked histogram with KDE and statistics for election turnout rates.
+    
+    Args:
+        election_results (pd.DataFrame): DataFrame containing election data.
+        turnout_column (str): Column name for turnout rates.
+        party_column (str): Column name for party affiliation.
+        party_colors (dict): Dictionary mapping party names to colors.
+        bins (np.array): Array of bin edges for the histogram.
+        title (str): Title of the plot.
+        figsize (tuple): Size of the figure.
+    
+    Returns:
+        None
+    """
+    if party_colors is None:
+        party_colors = {"Con": "#2475C0", "Lab": "#DA302F", "LD": "#F7A938", "Other": "#8E8D8D"}
+
+    # Categorize winning party
+    election_results["Winning_party"] = election_results[party_column].apply(
+        lambda x: "Other" if x not in ["Con", "Lab", "LD"] else x
+    )
+    
+    # Define party categories
+    party_categories = ["Lab", "Con", "LD", "Other"]
+    stacked_data = [
+        election_results.loc[election_results["Winning_party"] == party, turnout_column]
+        for party in party_categories
+    ]
+
+    # Calculate statistics
+    mean = election_results[turnout_column].mean()
+    std = election_results[turnout_column].std()
+    skewness = skew(election_results[turnout_column])
+    kurt = kurtosis(election_results[turnout_column])
+
+    # Create figure and axis
+    fig, ax1 = plt.subplots(figsize=figsize)
+
+    # Plot the stacked histogram
+    counts, _, _ = ax1.hist(
+        stacked_data,
+        bins=bins,
+        stacked=True,
+        color=[party_colors[party] for party in party_categories],
+        edgecolor="black",
+        alpha=0.8,
+        label=party_categories,
+    )
+
+    ax1.set_xlabel("Turnout Rate (%)", fontsize=14)
+    ax1.set_ylabel("Count", fontsize=14)
+    ax1.tick_params(axis="y")
+
+    # Add KDE plot on secondary axis
+    ax2 = ax1.twinx()
+    sns.kdeplot(
+        election_results[turnout_column],
+        color="black",
+        linewidth=2,
+        label="KDE",
+        ax=ax2
+    )
+
+    ax2.set_ylabel("Density", fontsize=14, color="black")
+    ax2.tick_params(axis="y", labelcolor="black")
+
+    # Add title
+    plt.title(title, fontsize=16, fontweight="bold")
+
+    # Annotate statistics
+    stats_text = f"Mean: {mean:.2f}%\nStd Dev: {std:.2f}%\nSkewness: {skewness:.2f}\nKurtosis: {kurt:.2f}"
+    ax1.annotate(stats_text, xy=(0.95, 0.95), xycoords="axes fraction", ha="right", va="top",
+                 bbox=dict(boxstyle="round,pad=0.3", edgecolor="gray", facecolor="white"),
+                 fontsize=12)
+
+    # Add legend
+    handles1, labels1 = ax1.get_legend_handles_labels()
+    handles2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(handles1 + handles2, labels1 + labels2, title="Legend", fontsize=12, title_fontsize=14)
+
+    # Add grid and layout adjustments
+    ax1.grid(axis="y", linestyle="--", alpha=0.6)
+    plt.tight_layout()
+
+    # Show plot
+    plt.show()
+
+
+def plot_qq(data, title="QQ Plot", xlabel="Theoretical Quantiles", ylabel="Ordered Values", 
+            dot_color="#2475C0", line_color="#DA302F"):
+    """
+    Creates a QQ plot for the given data with improved formatting and customization options.
+    
+    Parameters:
+    - data (array-like): The data to be plotted.
+    - title (str): The title of the plot.
+    - xlabel (str): The label for the x-axis.
+    - ylabel (str): The label for the y-axis.
+    - dot_color (str): Color of the dots in the QQ plot.
+    - line_color (str): Color of the diagonal reference line in the QQ plot.
+
+    Returns:
+    - None: Displays the QQ plot.
+    """
+    # Create the QQ plot
+    plt.figure(figsize=(10, 6))
+    qq = probplot(data, dist="norm")
+    theoretical_quantiles, ordered_values = qq[0]
+    slope, intercept, _ = qq[1]
+
+    # Scatter plot for the data points
+    plt.scatter(theoretical_quantiles, ordered_values, color=dot_color, label="Data Points", alpha=0.9)
+
+    # Plot the diagonal line
+    plt.plot(theoretical_quantiles, slope * theoretical_quantiles + intercept, color=line_color, 
+             label="Reference Line", linewidth=2)
+
+    # Customize the title and labels
+    plt.title(title, fontsize=16, fontweight='bold', pad=15)
+    plt.xlabel(xlabel, fontsize=12)
+    plt.ylabel(ylabel, fontsize=12)
+
+    # Add a grid for better readability
+    plt.grid(linestyle='--', alpha=0.6)
+
+    # Add a legend
+    plt.legend(fontsize=12)
+
+    # Adjust layout for better spacing
+    plt.tight_layout()
+
+    # Show the plot
+    plt.show()
+
+
+def plot_turnout_and_electorate(election_data, title="Turnout and Total Electorate at General Elections", 
+                                turnout_color="#e07a5f", electorate_color="#3d405b", background_color="#f4f1de"):
+    """
+    Plots turnout rates as a bar chart and total electorate as a line chart with dual y-axes.
+
+    Parameters:
+    - election_data (pd.DataFrame): Data containing 'election', 'turnout_rate', and 'total_electorate' columns.
+    - title (str): Title of the plot.
+    - turnout_color (str): Color of the turnout bar chart.
+    - electorate_color (str): Color of the electorate line chart.
+    - background_color (str): Background color of the chart.
+
+    Returns:
+    - None: Displays the plot.
+    """
+    # Create the plot
+    fig, ax1 = plt.subplots(figsize=(12, 6))
+
+    # Set background color
+    ax1.set_facecolor(background_color)
+
+    # Plot the turnout rate as a bar chart
+    ax1.bar(election_data['election'], election_data['turnout_rate'], color=turnout_color, label='Turnout Rate (%)')
+    ax1.set_title(title, fontsize=16, pad=15)
+    ax1.set_xlabel('Election Year', fontsize=12)
+    ax1.set_ylabel('Turnout Rate (%)', fontsize=12, color=turnout_color)
+    ax1.tick_params(axis='y', labelcolor=turnout_color)
+
+    # Add grid lines
+    ax1.grid(axis='y', linestyle='--', color='grey', alpha=0.7)
+
+    # Adjust x-axis ticks
+    ax1.set_xticks(range(len(election_data['election'])))
+    ax1.set_xticklabels(election_data['election'], rotation=45, fontsize=10)
+
+    # Add a secondary y-axis for total electorate
+    ax2 = ax1.twinx()
+    ax2.plot(election_data['election'], election_data['total_electorate'], color=electorate_color, 
+             marker='o', label='Total Electorate')
+    ax2.set_ylabel('Total Electorate', fontsize=12, color=electorate_color)
+    ax2.tick_params(axis='y', labelcolor=electorate_color)
+
+    # Adding a legend
+    fig.legend(loc="upper right", bbox_to_anchor=(1, 1), bbox_transform=ax1.transAxes, fontsize=10)
+
+    # Adding a note
+    plt.figtext(0.5, -0.03, "Note: 1974F and 1974O are the two general elections held February and October in 1974", 
+                ha='center', fontsize=10, wrap=True)
+
+    # Adjust layout
+    plt.tight_layout()
+
+    # Show the plot
+    plt.show()
+
+
+
+def plot_contention_distribution(data, contention_column, majority_column, valid_votes_column, 
+                                  bins=20, kde=True, color="skyblue", 
+                                  percentiles=[0.33, 0.67], 
+                                  title="Distribution of Contentiousness", 
+                                  xlabel="Contentiousness", ylabel="Frequency"):
+    """
+    Plots the distribution of contentiousness with KDE and highlights specified percentiles.
+
+    Parameters:
+    - data (pd.DataFrame): The dataset containing election results.
+    - contention_column (str): Column name to store the calculated contentiousness.
+    - majority_column (str): Column name for majority votes.
+    - valid_votes_column (str): Column name for valid votes.
+    - bins (int): Number of bins for the histogram.
+    - kde (bool): Whether to include a KDE plot.
+    - color (str): Color of the histogram.
+    - percentiles (list of floats): Percentiles to highlight (e.g., [0.33, 0.67]).
+    - title (str): Title of the plot.
+    - xlabel (str): Label for the x-axis.
+    - ylabel (str): Label for the y-axis.
+
+    Returns:
+    - None: Displays the plot.
+    """
+    # Calculate contentiousness
+    data[contention_column] = 1 - data[majority_column] / data[valid_votes_column]
+
+    # Plot the histogram
+    plt.figure(figsize=(12, 6))
+    sns.histplot(
+        data[contention_column],
+        bins=bins,
+        kde=kde,
+        color=color,
+        edgecolor="black",
+        alpha=0.8
+    )
+
+    # Calculate and add percentile lines
+    percentile_values = data[contention_column].quantile(percentiles)
+    for i, perc in enumerate(percentiles):
+        color_line = "red" if i == 0 else "green"
+        plt.axvline(percentile_values.iloc[i], color=color_line, linestyle="--", 
+                    label=f"{int(perc * 100)}th percentile")
+
+    # Title and labels
+    plt.title(title, fontsize=16, fontweight="bold")
+    plt.xlabel(xlabel, fontsize=14)
+    plt.ylabel(ylabel, fontsize=14)
+    plt.grid(axis="y", linestyle="--", alpha=0.6)
+    plt.legend()
+
+    # Show the plot
+    plt.tight_layout()
+    plt.show()
+
+
+
+def analyze_turnout_by_contention(election_data, contention_column, turnout_column, 
+                                  constituency_column, percentiles, 
+                                  bins=[0, 0.33, 0.67, 1], 
+                                  bin_labels=['Low', 'Medium', 'High'], 
+                                  palette="viridis", figsize=(8, 6)):
+    """
+    Analyze turnout rates by contentiousness levels and perform One-Way ANOVA.
+
+    Parameters:
+    - election_data (pd.DataFrame): Dataset containing election results.
+    - contention_column (str): Column name for contentiousness data.
+    - turnout_column (str): Column name for turnout rates.
+    - constituency_column (str): Column name for constituency names.
+    - percentiles (pd.Series or list): Percentiles for binning contentiousness.
+    - bins (list): Bin edges for grouping contentiousness levels.
+    - bin_labels (list): Labels for each contentiousness group.
+    - palette (str): Seaborn palette for boxplot.
+    - figsize (tuple): Size of the figure.
+
+    Returns:
+    - None: Displays the boxplot and prints ANOVA results.
+    """
+    # Create a copy of relevant data
+    contention_data = election_data[[constituency_column, contention_column, turnout_column]].copy()
+
+    # Categorize contentiousness into bins
+    contention_data['group'] = pd.cut(contention_data[contention_column], bins=bins, labels=bin_labels)
+    
+    anova_result = stats.f_oneway(
+        contention_data.loc[contention_data['group'] == 'High', turnout_column],
+        contention_data.loc[contention_data['group'] == 'Medium', turnout_column],
+        contention_data.loc[contention_data['group'] == 'Low', turnout_column]
+    )
+    print('ANOVA p-value:', anova_result.pvalue)
+    if anova_result.pvalue < 0.05:
+        print('The differences in Turnout Rate between groups are statistically significant.')
+    else:
+        print('The differences in Turnout Rate between groups are not statistically significant.')
+    
+    # Plot the boxplot
+    plt.figure(figsize=figsize)
+    sns.boxplot(
+        x='group',
+        y=turnout_column,
+        data=contention_data,
+        hue='group',
+        palette=palette,
+    )
+
+    # annotate the anova p-value on the plot, as a bbox on the top right corner
+    plt.figtext(0.96, 0.9, f"ANOVA p-value: {anova_result.pvalue:.2e}", ha='right', va='top', 
+                bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=1'))
+
+    plt.title('Turnout Rates by Contentiousness Group', fontsize=16, fontweight='bold')
+    plt.xlabel('Contentiousness Group', fontsize=14)
+    plt.ylabel('Turnout Rate (%)', fontsize=14)
+    plt.tight_layout()
+    plt.show()
+
+
+def analyze_turnout_by_party(election_data, party_column, turnout_column, party_order=None, palette="viridis", figsize=(10, 6)):
+    """
+    Analyze turnout rates by winning party and perform One-Way ANOVA.
+
+    Parameters:
+    - election_data (pd.DataFrame): Dataset containing election results.
+    - party_column (str): Column name for winning party data.
+    - turnout_column (str): Column name for turnout rates.
+    - party_order (list): Order of parties for the boxplot.
+    - palette (str): Seaborn palette for boxplot.
+    - figsize (tuple): Size of the figure.
+
+    Returns:
+    - None: Displays the boxplot and prints ANOVA results.
+    """
+    # Categorize "Winning_party" as specified
+    election_data["Winning_party"] = election_data[party_column].apply(
+        lambda x: "Other" if x not in ["Con", "Lab", "LD"] else x
+    )
+    
+    # Determine party groups
+    parties = election_data["Winning_party"].unique()
+    if party_order is None:
+        party_order = ["Con", "Lab", "LD", "Other"]
+    
+    # Perform ANOVA
+    turnout_by_party = [
+        election_data.loc[election_data["Winning_party"] == party, turnout_column]
+        for party in party_order if party in parties
+    ]
+    anova_result = stats.f_oneway(*turnout_by_party)
+    print("ANOVA p-value:", anova_result.pvalue)
+    if anova_result.pvalue < 0.05:
+        print("The differences in Turnout Rate between parties are statistically significant.")
+    else:
+        print("The differences in Turnout Rate between parties are not statistically significant.")
+    
+    # Plot the boxplot
+    plt.figure(figsize=figsize)
+    sns.boxplot(
+        x="Winning_party",
+        y=turnout_column,
+        data=election_data,
+        order=party_order,
+        hue = "Winning_party",
+        palette=palette
+    )
+
+    # Annotate the ANOVA p-value on the plot
+    plt.figtext(
+        0.96, 0.9, f"ANOVA p-value: {anova_result.pvalue:.2e}", ha="right", va="top",
+        bbox=dict(facecolor="white", edgecolor="black", boxstyle="round,pad=1")
+    )
+    
+    # Add title and labels
+    plt.title("Turnout Rate by Winning Party", fontsize=16, fontweight="bold")
+    plt.xlabel("Winning Party", fontsize=14)
+    plt.ylabel("Turnout Rate (%)", fontsize=14)
+    plt.grid(axis="y", linestyle="--", alpha=0.6)
+    plt.tight_layout()
+    plt.show()
+
+
+
+
+def test_linearity(df, col_prefix, years=[2001, 2011, 2021], threshold=0.7):
+    """
+    Test the linearity of a variable across multiple years.
+
+    Parameters:
+        df (pd.DataFrame): The DataFrame containing the data.
+        col_prefix (str): The column prefix to test for linearity.
+        years (list): A list of years to test for linearity.
+        threshold (float): The R-squared threshold for linearity.
+
+    Returns:
+        str: Either 'linear' or 'cubic' depending on the overall linearity of the column.
+    """
+    linear_count = 0
+    total_count = 0
+
+    for _, row in tqdm(df.iterrows(), total=df.shape[0], desc=f"Testing Linearity for {col_prefix}"):
+        y = [row[f"{col_prefix}_{year}"] for year in years]
+        x = years
+        # Fit a linear regression
+        _, _, r_value, _, _ = linregress(x, y)
+        if abs(r_value) >= threshold:
+            linear_count += 1
+        total_count += 1
+    # Decide method based on proportion of linear trends
+    return 'linear' if linear_count / total_count > 0.7 else 'cubic'
+
+
+def interpolate_data(df, columns, years=[2001, 2011, 2021], target_years=[2010, 2015, 2017, 2019, 2024], methods=None):
+    """
+    Interpolate data for multiple target years using the specified interpolation methods.
+
+    Parameters:
+        df (pd.DataFrame): The input DataFrame containing the data.
+        columns (list): List of column prefixes to interpolate (e.g., ['white_british', 'asian_total']).
+        years (list): The years corresponding to the data columns (default: [2001, 2011, 2021]).
+        target_years (list): List of years to interpolate (e.g., [2010, 2015, 2017, 2019]).
+        methods (dict): Dictionary mapping column prefixes to interpolation methods ('linear' or 'cubic').
+
+    Returns:
+        pd.DataFrame: The original DataFrame with new columns containing interpolated values for each target year.
+    """
+    if methods is None:
+        raise ValueError("Methods dictionary must be provided for interpolation.")
+
+    interpolated_results = []
+
+    for _, row in tqdm(df.iterrows(), total=df.shape[0], desc="Interpolating Data"):
+        row_result = {'OA11CD': row['OA11CD']}  # Identifier for each OA
+
+        for col_prefix in columns:
+            # Extract the values for interpolation
+            data_values = [row[f"{col_prefix}_{year}"] for year in years]
+
+            # Check for missing values
+            if any(pd.isnull(data_values)):
+                for target_year in target_years:
+                    row_result[f"{col_prefix}_{target_year}"] = np.nan  # Cannot interpolate with missing data
+            else:
+                # Determine interpolation method
+                method = methods.get(col_prefix, 'linear')  # Default to 'linear' if not specified
+
+                # Perform interpolation
+                if method == 'linear':
+                    interpolator = interp1d(years, data_values, kind='linear', fill_value="extrapolate")
+                elif method == 'cubic':
+                    interpolator = CubicSpline(years, data_values)
+                else:
+                    raise ValueError(f"Invalid method for {col_prefix}. Use 'linear' or 'cubic'.")
+
+                # Interpolate for all target years
+                for target_year in target_years:
+                    row_result[f"{col_prefix}_{target_year}"] = interpolator(target_year)
+
+        interpolated_results.append(row_result)
+
+    # Convert results to a DataFrame
+    interpolated_df = pd.DataFrame(interpolated_results)
+
+    # Merge the interpolated values back to the original DataFrame
+    result_df = pd.merge(df, interpolated_df, on='OA11CD')
+    return result_df
+
+
+def process_interpolation_oa(df_direct, df_approx, columns, years=[2001, 2011, 2021], target_years=[2010, 2015, 2017, 2019, 2024], threshold=0.7):
+    """
+    Full pipeline to determine interpolation methods using df_direct and perform interpolation on df_approx.
+
+    Parameters:
+        df_direct (pd.DataFrame): DataFrame for direct matching (unchanged OAs).
+        df_approx (pd.DataFrame): DataFrame for approximated matching (aggregated OAs).
+        columns (list): List of column prefixes to process (e.g., ['white_british', 'asian_total']).
+        years (list): The years corresponding to the data columns (default: [2001, 2011, 2021]).
+        target_years (list): List of years to interpolate (e.g., [2010, 2015, 2017, 2019]).
+        threshold (float): The R-squared threshold for linearity.
+
+    Returns:
+        pd.DataFrame: The DataFrame with interpolated values for target years.
+    """
+    methods = {}
+
+    # Step 1: Determine interpolation methods using df_direct
+    for col_prefix in tqdm(columns, desc="Determining Interpolation Methods"):
+        methods[col_prefix] = test_linearity(df_direct, col_prefix, years=years, threshold=threshold)
+        print(f"{col_prefix}: {methods[col_prefix]} interpolation chosen")
+
+    # Step 2: Perform interpolation using df_approx
+    interpolated_df = interpolate_data(df_approx, columns, years=years, target_years=target_years, methods=methods)
+
+    return interpolated_df
+
+def plot_boxplot(data, x_col, y_col, title, xlabel, ylabel):
+    plt.figure(figsize=(12, 6))
+    sns.boxplot(
+        x=x_col,
+        y=y_col,
+        data=data,
+        hue = x_col,
+    )
+    plt.title(title, fontsize=16, fontweight='bold')
+    plt.xlabel(xlabel, fontsize=14)
+    plt.ylabel(ylabel, fontsize=14)
+    plt.grid(axis='y', linestyle='--', alpha=0.6)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_polling_station_turnout(pcon_boundary_data, pcon_feature_counts, election_results):
+    # Reproject boundaries and calculate area
+    pcon25_boundary_tmp = pcon_boundary_data.copy()
+    pcon25_boundary_tmp = pcon25_boundary_tmp.to_crs("EPSG:27700")
+    pcon25_boundary_tmp['area'] = pcon25_boundary_tmp['geometry'].area
+
+    # Combine polling station features into one column
+    pcon25_features = pcon_feature_counts.copy()
+    pcon25_features['polling_station'] = (
+        pcon25_features['amenity_polling_station'] +
+        pcon25_features['polling_station_yes'] +
+        pcon25_features['polling_station_ballot_box']
+    )
+    pcon25_features.drop(['amenity_polling_station', 'polling_station_yes', 'polling_station_ballot_box'], axis=1, inplace=True)
+
+    # Get the list of all features
+    all_features = pcon25_features.columns.tolist()[1:]
+
+    # Map turnout rates to the features dataframe
+    pcon25_features['turnout_rate'] = pcon25_features['PCON25CD'].map(election_results.set_index('ONS_ID')['Turnout_rate'])
+
+    # Merge with boundary data to include area
+    pcon25_features = pcon25_features.merge(
+        pcon25_boundary_tmp[['PCON25CD', 'area', 'geometry']],
+        on='PCON25CD'
+    )
+
+    # Calculate density of features (per square kilometer)
+    pcon25_features_density = pcon25_features.copy()
+    for feature in all_features:
+        pcon25_features_density[feature] = (
+            pcon25_features_density[feature] / pcon25_features_density['area'] * 1e6
+        )
+
+    # Add binary column for polling station presence
+    pcon25_features_tmp = pcon25_features.copy()
+    pcon25_features_tmp['polling_station'] = pcon25_features_tmp['polling_station'].apply(lambda x: "True" if x > 0 else "False")
+
+    plot_boxplot(
+        pcon25_features_tmp,
+        'polling_station',
+        'turnout_rate',
+        'Turnout Rate vs Polling Station',
+        'Polling Station Presence',
+        'Turnout Rate (%)'
+    )
+
+    if 'polling_station' in all_features:
+        all_features.remove('polling_station')
+
+    # Calculate correlations between turnout_rate and all features
+    correlations = (
+        pcon25_features_tmp[all_features + ['turnout_rate']]
+        .corr()['turnout_rate']
+        .sort_values(ascending=False)
+    )
+    correlations = correlations.drop(['turnout_rate'])  # Remove self-correlation
+
+    # Create Community Engagement Index
+    engagement_features = all_features.copy()
+
+    # Normalize engagement-related features
+    pcon25_features_tmp = pcon25_features.copy()
+    for feature in engagement_features:
+        pcon25_features_tmp[feature] = (
+            pcon25_features_tmp[feature] - pcon25_features_tmp[feature].min()
+        ) / (
+            pcon25_features_tmp[feature].max() - pcon25_features_tmp[feature].min()
+        )
+
+    # Calculate Engagement Index using correlations as weights
+    pcon25_features['engagement_index'] = 0
+    for feature in engagement_features:
+        pcon25_features['engagement_index'] += (
+            pcon25_features_tmp[feature] * correlations[feature]
+        )
+
+    # Correlation between Engagement Index and Turnout Rate
+    engagement_turnout_corr = (
+        pcon25_features[['engagement_index', 'turnout_rate']]
+        .corr()['turnout_rate']['engagement_index']
+    )
+    print(f"Correlation between Engagement Index and Turnout Rate: {engagement_turnout_corr}")
+
+    # Plot the correlation between Engagement Index and Turnout Rate
+    calculate_and_visualise_correlations(
+        pcon25_features,
+        [{"x_col": "engagement_index", "y_col": "turnout_rate"}],
+        figsize=(10, 8)
+    )
+
+    return pcon25_features
+
+
+def merge_total_population(interpolated_df, total_df, total_col_name):
+    """
+    Merge total population data with the interpolated DataFrame.
+
+    Parameters:
+        interpolated_df (pd.DataFrame): Interpolated data.
+        total_df (pd.DataFrame): DataFrame containing total population values.
+        total_col_name (str): Column name for the total population.
+
+    Returns:
+        pd.DataFrame: Updated DataFrame with total population merged.
+    """
+    return interpolated_df.merge(
+        total_df[['geography_code', total_col_name]], 
+        left_on='OA11CD', 
+        right_on='geography_code', 
+        how='left'
+    )
+
+def calculate_counts(interpolated_df, columns, years, total_col_name):
+    """
+    Calculate counts from proportions using total population.
+
+    Parameters:
+        interpolated_df (pd.DataFrame): Interpolated data.
+        columns (list): Column prefixes to process.
+        years (list): Target years.
+        total_col_name (str): Column name for the total population.
+
+    Returns:
+        pd.DataFrame: Updated DataFrame with counts calculated.
+    """
+    for col in columns:
+        for year in years:
+            interpolated_df[f"{col}_{year}_count"] = (
+                interpolated_df[f"{col}_{year}"] * interpolated_df[total_col_name]
+            )
+    return interpolated_df
+
+def aggregate_to_pcon(interpolated_df, columns, years, total_col_name, pcon_map, pcon_col='PCON11CD'):
+    """
+    Aggregate counts and compute proportions by parliamentary constituency.
+
+    Parameters:
+        interpolated_df (pd.DataFrame): Data with counts calculated.
+        columns (list): Column prefixes to process.
+        years (list): Target years.
+        total_col_name (str): Column name for the total population.
+        pcon_map (pd.DataFrame): Mapping of OA to PCON.
+
+    Returns:
+        pd.DataFrame: Aggregated data by PCON.
+    """
+    # Merge OA to PCON mapping
+    interpolated_df = interpolated_df.merge(pcon_map, on='OA11CD', how='left')
+
+    # Group by PCON and aggregate counts
+    grouped_df = interpolated_df.groupby(pcon_col).agg(
+        {
+            total_col_name: 'sum',
+            **{f"{col}_{year}_count": 'sum' for col in columns for year in years}
+        }
+    ).reset_index()
+
+    # Compute proportions
+    for col in columns:
+        for year in years:
+            grouped_df[f"frac_{col}_{year}"] = (
+                grouped_df[f"{col}_{year}_count"] / grouped_df[total_col_name]
+            )
+    return grouped_df
+
+def process_pipeline_pcon(result_dfs, total_dfs, pcon_map, config, years=[2010, 2015, 2017, 2019], pcon_col='PCON11CD'):
+    """
+    Process all pipelines (ethnic group, household composition, deprivation, qualification).
+
+    Parameters:
+        result_dfs (dict): Dictionary of interpolated result DataFrames for each pipeline.
+        total_dfs (dict): Dictionary of total population DataFrames for each pipeline.
+        pcon_map (pd.DataFrame): Mapping of OA11CD to PCON11CD.
+        config (dict): Configuration dictionary with column prefixes and total column names.
+        years (list): Target years for interpolation.
+
+    Returns:
+        dict: Dictionary of processed DataFrames for each pipeline aggregated by PCON.
+    """
+    final_results = {}
+
+    for pipeline, params in config.items():
+        print(f"Processing {pipeline} pipeline...")
+
+        # Step 1: Copy interpolated data
+        interpolated_df = result_dfs[pipeline].copy()
+
+        # Step 2: Merge total population
+        interpolated_df = merge_total_population(
+            interpolated_df, 
+            total_dfs[pipeline], 
+            params['total_col']
+        )
+
+        # Step 3: Calculate counts
+        interpolated_df = calculate_counts(
+            interpolated_df, 
+            params['columns'], 
+            years, 
+            params['total_col']
+        )
+
+        # Step 4: Aggregate to PCON and compute proportions
+        final_results[pipeline] = aggregate_to_pcon(
+            interpolated_df, 
+            params['columns'], 
+            years, 
+            params['total_col'], 
+            pcon_map,
+            pcon_col=pcon_col
+        )
+    
+    print("___ Processing complete. ___")
+    
+    return final_results
+
+def get_merged_census_results(final_results):
+    # Access results for individual pipelines
+    ethnic_group_results = final_results['ethnic_group']
+    household_results = final_results['household_composition']
+    deprivation_results = final_results['deprivation']
+    qualification_results = final_results['qualification']
+    economic_activity_results = final_results['economic_activity']
+
+    merged_census_results = pd.concat([ethnic_group_results, household_results, deprivation_results, qualification_results, economic_activity_results], axis=1)
+    merged_census_results = remove_duplicate_columns(merged_census_results, "interpolated_census_result")
+    return merged_census_results
+
+def get_yearly_census_results(merged_census_results, election_results, years=[2010, 2015, 2017, 2019]):
+    M = {}
+    for year in years:
+        election_results_history_now = election_results[election_results['election'] == year]
+        election_results_history_merged = election_results_history_now.merge(merged_census_results, left_on='constituency_id', right_on='PCON11CD', how='inner')
+        # sort by constituency_id
+        election_results_history_merged = election_results_history_merged.sort_values('constituency_id')
+        feature_columns = []
+        for key, cols in COLUMN_PREFIXES.items():
+            for col in cols:
+                feature_columns.append(f"frac_{col}_{year}")
+        M[year] = election_results_history_merged[feature_columns + ['turnout']]
+    
+    return M
+            
+
+def plot_turnout_comparison(regional_turnout_2024, regional_turnout_2019, xlim=(50, 75), dot_size=100):
+    """
+    Plot a comparison of turnout rates for 2019 and 2024 general elections by region.
+
+    Parameters:
+        regional_turnout_2024 (pd.DataFrame): DataFrame with regions as index and 2024 turnout rates.
+        regional_turnout_2019 (pd.DataFrame): DataFrame with regions as index and 2019 turnout rates.
+        xlim (tuple): Tuple specifying the limits of the x-axis (default: (50, 75)).
+        dot_size (int): Size of the scatter plot dots (default: 100).
+    """
+    # Prepare data
+    regions = regional_turnout_2024.index  # List of regions
+    turnout_2024 = regional_turnout_2024['turnout_rate']
+    turnout_2019 = regional_turnout_2019['turnout_rate']
+
+    # Sorting data for consistent ordering
+    sorted_indices = turnout_2024.argsort()
+    regions = regions[sorted_indices]
+    turnout_2024 = turnout_2024.iloc[sorted_indices]
+    turnout_2019 = turnout_2019.iloc[sorted_indices]
+
+    # Plotting
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    # Horizontal bars connecting scatter points
+    for i, region in enumerate(regions):
+        # use dotted lines to connect the points
+        ax.plot([turnout_2019.iloc[i], turnout_2024.iloc[i]], [region, region], color='#cdb4db', linewidth=1, linestyle='--')
+
+
+    # Scatter points for 2019
+    ax.scatter(turnout_2019, regions, color='#a2d2ff', label='2019 general election', zorder=3, s=dot_size)
+
+    # Scatter points for 2024
+    ax.scatter(turnout_2024, regions, color='#ffc8dd', label='2024 general election', zorder=3, s=dot_size)
+
+    # Remove unwanted spines
+    ax.spines['top'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
+
+    # Add labels, title, and legend
+    ax.set_xlabel("Turnout Rate (%)")
+    ax.set_ylabel("Region")
+    ax.set_title("Turnout by Region and Country (2019 vs 2024)")
+    ax.legend()
+
+    # Add grid and style adjustments
+    ax.grid(axis='x', linestyle='--', alpha=0.7)
+    ax.set_xlim(xlim)
+
+    # set background color
+    ax.set_facecolor('#f5ebe0')
+
+    # Show plot
     plt.tight_layout()
     plt.show()

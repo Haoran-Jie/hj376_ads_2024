@@ -1,5 +1,6 @@
 import os
 import requests
+import geopandas as gpd
 
 
 def download_file(url, output_file, file_type="binary", chunk_size=1024):
@@ -43,3 +44,24 @@ def download_file(url, output_file, file_type="binary", chunk_size=1024):
     except requests.exceptions.RequestException as e:
         print(f"Error downloading the file: {e}")
         return False
+    
+
+def geojson_to_csv_with_wkt(geojson_path: str, csv_path: str):
+    """
+    Converts a GeoJSON file to a CSV file with a WKT column.
+
+    Args:
+    geojson_path (str): The path to the GeoJSON file.
+    csv_path (str): The path to save the CSV file.
+    """
+    # Load the GeoDataFrame
+    gdf = gpd.read_file(geojson_path)
+
+    # Extract the WKT geometries
+    gdf["wkt"] = gdf["geometry"].apply(lambda x: x.wkt)
+
+    # Drop the geometry column
+    gdf.drop(columns=["geometry"], inplace=True)
+
+    # Save the DataFrame as a CSV file
+    gdf.to_csv(csv_path, index=False)

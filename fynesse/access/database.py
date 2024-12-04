@@ -18,6 +18,12 @@ def execute_query(connection: pymysql.connections.Connection, query: str):
 
 
 def load_csv_to_table(connection: pymysql.connections.Connection, table_name: str, file_path: str, columns: str, ignore_rows: int = 1):
+
+    if isinstance(file_path, list):
+        for file in file_path:
+            load_csv_to_table(connection, table_name, file, columns, ignore_rows)
+        return
+    
     query = f"""
     LOAD DATA LOCAL INFILE '{file_path}'
     INTO TABLE {table_name}
@@ -100,3 +106,61 @@ def create_connection(user: str, password: str, host: str, database: str, port:i
     except Exception as e:
         print(f"Error connecting to the MariaDB Server: {e}")
     return conn
+
+
+def CTE_query(CTE_query, CTE_name):
+    return f"""
+    WITH {CTE_name} AS (
+        {CTE_query}
+    )
+    SELECT
+    e.Constituency_name,
+    e.Turnout_rate,
+    t.*
+    FROM election_results e
+    INNER JOIN {CTE_name} t
+    ON e.ONS_ID = t.constituency_id;
+    """
+
+def CTE_queries(CTE_queries, CTE_names):
+    """
+    Combines multiple CTE queries into a single SQL query and selects all columns from all CTEs,
+    alongside `Constituency_name` and `Turnout_rate` from election_results.
+
+    Parameters:
+        CTE_queries: List of SQL queries for each CTE.
+        CTE_names: List of names for each CTE.
+
+    Returns:
+        A combined SQL query string with all the CTEs and a final SELECT statement.
+    """
+    if len(CTE_queries) != len(CTE_names):
+        raise ValueError("The number of queries and names must be the same.")
+
+    # Combine all CTEs into one string
+    combined_ctes = ",\n".join(
+        [f"{name} AS (\n{query}\n)" for name, query in zip(CTE_names, CTE_queries)]
+    )
+
+    # Build the final SELECT statement combining columns from all CTEs and election_results
+    combined_columns = ",\n    ".join(
+        [f"{name}.*" for name in CTE_names]
+    )  # Select all columns from each CTE
+    final_query = f"""
+    WITH {combined_ctes}
+    SELECT
+    e.Constituency_name,
+    e.Turnout_rate,
+    e.ONS_ID,
+    {combined_columns}
+    FROM election_results e
+    """
+    # Join all CTEs using geometry_id
+    join_clauses = " ".join(
+        [f"LEFT JOIN {name} ON e.ONS_ID = {name}.constituency_id" for i, name in enumerate(CTE_names)]
+    )
+
+    # Add join clauses to the final query
+    final_query += join_clauses
+
+    return final_query

@@ -71,3 +71,39 @@ def download_and_process_geojson(url, output_geojson_file, output_csv_file, epsg
         print(f"Processed and saved to {output_csv_file}")
     else:
         print(f"Processed GeoJSON already exists: {output_csv_file}")
+
+
+def download_2011_census_data(category, basedir="./"):
+    """
+    Download 2011 Census Data for a specific category and OA geography.
+    
+    Args:
+    category (str): The category of census data to download.
+    oa_geography (str): The OA geography code.
+    
+    Returns:
+    None
+    """
+    oa_geography = {
+        'East': '2013265926TYPE299',
+        'East_Midlands': '2013265924TYPE299',
+        'London': '2013265927TYPE299',
+        'North_East': '2013265921TYPE299',
+        'North_West': '2013265922TYPE299',
+        'South_East': '2013265928TYPE299',
+        'South_West': '2013265929TYPE299',
+        'Wales': '2013265930TYPE299',
+        'West_Midlands': '2013265925TYPE299',
+        'Yorkshire_Humber': '2013265923TYPE299'
+    }
+    nm_codes = {
+        'age_distribution': 'NM_145_1', 
+        'ethnicity': 'NM_608_1',
+        'qualification': 'NM_623_1',
+        'household_composition': 'NM_605_1',
+        'economic_activity': 'NM_624_1',
+        'deprivation': 'NM_519_1'
+    }
+    for region, oa_code in oa_geography.items():
+        url = f"https://www.nomisweb.co.uk/api/v01/dataset/{nm_codes[category]}.bulk.csv?time=latest&measures=20100&rural_urban=total&geography={oa_code}"
+        download_file(url, f"{basedir}{category}_{region}.csv")
