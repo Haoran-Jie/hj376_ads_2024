@@ -42,7 +42,10 @@ class OSMFeatureHandlerWithProgress(osm.SimpleHandler):
         elif element_type == "way":
             coords = []
             for n in element.nodes:
-                coords.append((n.location.lon, n.location.lat))
+                try:
+                    coords.append((n.lon, n.lat))
+                except osm.InvalidLocationError:
+                    continue  # Skip nodes with invalid locations
             if coords:
                 try:
                     self.features.append({
@@ -62,7 +65,7 @@ class OSMFeatureHandlerWithProgress(osm.SimpleHandler):
                     coords = []
                     for n in member.nodes:
                         try:
-                            coords.append((n.location.lon, n.location.lat))
+                            coords.append((n.lon, n.lat))
                         except osm.InvalidLocationError:
                             # Skip invalid nodes within the way
                             print(f"Skipping invalid node in relation {element.id}, member {member.ref}")
