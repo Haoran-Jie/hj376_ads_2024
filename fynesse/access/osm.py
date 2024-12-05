@@ -199,13 +199,15 @@ def get_osm_features_counts(oa_geo: gpd.GeoDataFrame, features: list, tags: dict
     return oa_geo
 
 
-def get_osm_features_from_pbf(pbf_file, tags):
+def get_osm_features_from_pbf(pbf_file, tags, total_elements = None):
     """Load features from a .osm.pbf file."""
 
     print("Extracting features from the PBF file...")
     total_elements_minimal = 783609 + 2745785 + 14833
     total_elements_refined = 1627408 + 6329649 + 17764
-    handler = OSMFeatureHandlerWithProgress(tags, total_elements_refined)
+    if not total_elements:
+        total_elements = total_elements_refined
+    handler = OSMFeatureHandlerWithProgress(tags, total_elements)
     handler.apply_file(pbf_file, locations=True)
     handler.close()
     return handler.features
