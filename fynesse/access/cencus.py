@@ -57,16 +57,30 @@ def download_and_process_geojson(url, output_geojson_file, output_csv_file, epsg
 
     if not os.path.exists(output_csv_file):
         print(f"Processing GeoJSON file: {output_geojson_file}")
+        # Read the GeoJSON file into a GeoDataFrame
         geo_data = gpd.read_file(output_geojson_file)
-        geo_data["geometry_wkt"] = geo_data["geometry"].apply(lambda x: x.wkt)
 
-        # Convert CRS and calculate area
+        # Calculate the area after reprojecting
         geo_data.to_crs(epsg=epsg_code, inplace=True)
         geo_data['area'] = geo_data['geometry'].area
+
+        # Convert the geometry to WKT format for saving
+        geo_data["geometry_wkt"] = geo_data["geometry"].apply(lambda x: x.wkt)
+
+        # Drop the geometry column and keep it as a GeoDataFrame
         geo_data = geo_data.drop(columns=["geometry"])
-        
-        # Convert back to geographic CRS for saving
+
+        # Convert back to GeoDataFrame with geometry from WKT
+        geo_data = gpd.GeoDataFrame(
+            geo_data,
+            geometry=gpd.GeoSeries.from_wkt(geo_data["geometry_wkt"]),
+            crs=f"EPSG:{epsg_code}"
+        )
+
+        # Reproject back to geographic CRS (EPSG:4326)
         geo_data.to_crs(epsg=4326, inplace=True)
+
+        # Save the processed GeoDataFrame to a CSV file
         geo_data.to_csv(output_csv_file, index=False)
         print(f"Processed and saved to {output_csv_file}")
     else:
