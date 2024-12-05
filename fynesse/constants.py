@@ -1,3 +1,183 @@
+# Tags to filter
+tags = {
+    "amenity": ["school", "kindergarten", "college", "university", "library", "childcare", "restaurant", "fast_food", "cafe", "ice_cream", "bar", "pub", "cinema", "theatre", "arts_centre", "nightclub", "bus_station", "bicycle_parking", "bicycle_rental", "community_centre", "events_venue", "place_of_worship", "hospital", "clinic", "pharmacy", "doctors", "dentist", "bank", "post_office", "atm", "marketplace", "charging_station", "toilets", "vending_machine"],
+    "landuse": ["farmland", "residential", "grass", "forest", "meadow", "orchard", "farmyard", "industrial", "vineyard", "cemetery", "commercial", "allotments", "retail", "basin", "quarry", "construction", "reservoir", "recreation_ground", "brownfield", "religious", "greenhouse_horticulture", "village_green", "garages", "military", "flowerbed", "railway", "greenfield", "aquaculture", "logging", "plant_nursery", "landfill", "education", "highway", "static_caravan", "salt_pond", "greenery"],
+    "building": ["yes", "house", "residential", "detached", "garage", "apartments", "shed", "hut", "industrial", "school", "hospital", "university", "retail", "construction"],
+    "highway": ["residential", "service", "track", "footway", "unclassified", "path", "crossing", "tiertiary", "secondary", "street_lamp", "bus_stop", "primary", "turning_circle", "living_street", "cycleway", "stop", "traffic_signals", "trunk", "steps", "motorway"],
+    "leisure": ["pitch", "swimming_pool", "garden", "park", "playground", "sports_centre", "stadium"],
+    "public_transport": ["station", "stop_position", "platform"],
+    "office": ["government", "company", "estate_agent", "educational_institution", "insurance", "it", "telecommunication"],
+}
+
+# create a refined tags dictionary that is smaller
+refined_tags = {
+    "amenity": [
+        "school", "university", "restaurant", "pub", "hospital", "bank",
+        "pharmacy", "cinema", "place_of_worship", "college", "library",
+        "cafeteria", "student_accommodation", "youth_centre", "hostel",
+        "bar", "nightclub", "marketplace", "community_centre", "clinic"
+    ],
+    "landuse": [
+        "residential", "industrial", "commercial", "retail", "education",
+        "campus", "recreational_ground", "dormitory", "cemetery", "military"
+    ],
+    "building": [
+        "yes", "apartments", "school", "hospital", "retail", "detached",
+        "university", "residential", "kindergarten", "campus", "student_hall",
+        "library", "hall_of_residence", "dormitory", "terrace", "commercial",
+        "hotel", "office"
+    ],
+    "highway": [
+        "residential", "footway", "crossing", "bus_stop", "cycleway",
+        "path", "pedestrian", "primary", "secondary", "tertiary"
+    ],
+    "leisure": [
+        "park", "playground", "sports_centre", "stadium", "pitch", "garden",
+        "sports_hall", "fitness_centre", "community_centre", "swimming_pool",
+        "dog_park", "beach"
+    ],
+    "public_transport": [
+        "station", "stop_position", "platform", "university_stop",
+        "bus_station", "tram_stop"
+    ],
+    "office": [
+        "government", "company", "educational_institution", "student_union",
+        "career_service", "coworking"
+    ],
+    "residential": ["university", "student", "dormitory", "mixed"],
+}
+
+files_t1 = {
+    "oa_coordinates": "./oa_coordinate_geo.csv",
+    "ns_sec_oa": "./ns_sec_oa.csv",
+    "population_density_oa": "./ts006_oa.csv",
+    "oa_feature_counts": "./oa_feature_counts_uk_refined.csv",
+    "osm_features": "./osm_features.csv",
+    "osm_tags": "./osm_tags.csv"
+}
+
+create_oa_coordinates_table = """
+CREATE TABLE IF NOT EXISTS oa_coordinates (
+    `FID` INT PRIMARY KEY,
+    `OA21CD` VARCHAR(20) COLLATE utf8_bin NOT NULL,
+    `LSOA21CD` VARCHAR(20) COLLATE utf8_bin NOT NULL,
+    `LSOA21NM` VARCHAR(255) COLLATE utf8_bin,
+    `LSOA21NMW` VARCHAR(255) COLLATE utf8_bin,
+    `BNG_E` INT NOT NULL,
+    `BNG_N` INT NOT NULL,
+    `LAT` DOUBLE NOT NULL,
+    `LONG` DOUBLE NOT NULL,
+    `GlobalID` VARCHAR(36) COLLATE utf8_bin NOT NULL,
+    `geom` GEOMETRY, -- New column for geometry
+    `geometry_wkt` LONGTEXT NOT NULL,      -- Temporary column for WKT geometry
+    `area` DOUBLE NOT NULL
+) ENGINE=InnoDB;
+"""
+
+create_ns_sec_oa_table = """
+CREATE TABLE IF NOT EXISTS ns_sec_oa (
+    `ns_sec_id` BIGINT(20) AUTO_INCREMENT PRIMARY KEY,
+    `date` YEAR NOT NULL,
+    `geography` VARCHAR(20) COLLATE utf8_bin NOT NULL,
+    `geography_code` VARCHAR(20) COLLATE utf8_bin NOT NULL,
+    `total_residents` INT NOT NULL,
+    `L1_L3_higher_managerial` INT NOT NULL,
+    `L4_L6_lower_managerial` INT NOT NULL,
+    `L7_intermediate_occupations` INT NOT NULL,
+    `L8_L9_small_employers` INT NOT NULL,
+    `L10_L11_lower_supervisory` INT NOT NULL,
+    `L12_semi_routine` INT NOT NULL,
+    `L13_routine_occupations` INT NOT NULL,
+    `L14_never_worked_unemployed` INT NOT NULL,
+    `L15_full_time_students` INT NOT NULL,
+    UNIQUE (`geography_code`)
+);
+"""
+
+create_population_density_oa_table = """
+CREATE TABLE IF NOT EXISTS population_density_oa (
+    `population_density_id` INT AUTO_INCREMENT PRIMARY KEY,
+    `date` YEAR NOT NULL,
+    `geography` VARCHAR(20) COLLATE utf8_bin NOT NULL,
+    `geography_code` VARCHAR(20) COLLATE utf8_bin NOT NULL,
+    `population_density_per_sq_km` DOUBLE NOT NULL,
+    UNIQUE (`geography_code`)
+);
+"""
+
+create_oa_feature_counts_table = f"""
+CREATE TABLE IF NOT EXISTS oa_feature_counts (
+    `FID` INT PRIMARY KEY,
+    {", ".join([f"{key}_{value} INT" for key, values in refined_tags.items() for value in values])}
+);
+"""
+
+create_osm_features = f"""
+CREATE TABLE IF NOT EXISTS osm_features (
+    id BIGINT PRIMARY KEY,
+    type VARCHAR(20) NOT NULL,
+    tags TEXT,
+    `geometry_wkt` MEDIUMTEXT NOT NULL,
+    `geom` GEOMETRY
+);
+"""
+
+create_osm_tags = f"""
+CREATE TABLE IF NOT EXISTS osm_tags (
+    osm_feature_id BIGINT NOT NULL,
+    `key` VARCHAR(255) NOT NULL,
+    value VARCHAR(255) NOT NULL,
+    PRIMARY KEY (osm_feature_id, `key`, value),
+    FOREIGN KEY (osm_feature_id) REFERENCES osm_features(id)
+);
+"""
+
+table_definitions_t1 = {
+    "oa_coordinates": create_oa_coordinates_table,
+    "ns_sec_oa": create_ns_sec_oa_table,
+    "population_density_oa": create_population_density_oa_table,
+    "oa_feature_counts": create_oa_feature_counts_table,
+    "osm_features": create_osm_features,
+    "osm_tags": create_osm_tags
+}
+
+
+# Column mappings for CSV loading
+column_mappings_t1 = {
+    "oa_coordinates": "`FID`, `OA21CD`, `LSOA21CD`, `LSOA21NM`, `LSOA21NMW`, `BNG_E`, `BNG_N`, `LAT`, `LONG`, `GlobalID`, `geometry_wkt`, `area`",
+    "ns_sec_oa": "`date`, `geography`, `geography_code`, `total_residents`, `L1_L3_higher_managerial`, `L4_L6_lower_managerial`, `L7_intermediate_occupations`, `L8_L9_small_employers`, `L10_L11_lower_supervisory`, `L12_semi_routine`, `L13_routine_occupations`, `L14_never_worked_unemployed`, `L15_full_time_students`",
+    "population_density_oa": "`date`, `geography`, `geography_code`, `population_density_per_sq_km`",
+    "oa_feature_counts": f"`FID`, {', '.join([f'{key}_{value}' for key, values in refined_tags.items() for value in values])}",
+    "osm_features": "`id`, `type`, `tags`, `geometry_wkt`",
+    "osm_tags": "`osm_feature_id`, `key`, `value`"
+}
+
+index_definitions_t1 = {
+        "oa_coordinates": [["LAT", "LONG"], "OA21CD"],
+        "ns_sec_oa": "geography_code",
+        "population_density_oa": "geography_code",
+        "oa_feature_counts": "FID",
+        "osm_tags": [["key", "value"]]
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # Define URLs and filenames
 file_urls = {
     "constituency_detail_csv": "https://researchbriefings.files.parliament.uk/documents/CBP-10009/HoC-GE2024-results-by-constituency.csv",
