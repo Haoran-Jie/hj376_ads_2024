@@ -203,7 +203,7 @@ def get_osm_features_from_pbf(pbf_file, tags):
     total_elements_minimal = 783609 + 2745785 + 14833
     total_elements_refined = 1627408 + 6329649 + 17764
     handler = OSMFeatureHandlerWithProgress(tags, total_elements_refined)
-    handler.apply_file(pbf_file)
+    handler.apply_file(pbf_file, locations=True)
     handler.close()
     return handler.features
 
